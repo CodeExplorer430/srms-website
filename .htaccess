@@ -1,0 +1,16 @@
+RewriteEngine On
+
+# Redirect old HTML files to PHP equivalents
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)_School_index\.html$ $1.php [R=301,L,NC]
+
+# Specific redirections for accuracy
+RewriteRule ^Home_School_index\.html$ index.php [R=301,L]
+RewriteRule ^Admission_School_index\.html$ admissions.php [R=301,L]
+RewriteRule ^About_School_index\.html$ about.php [R=301,L]
+RewriteRule ^News_School_index\.html$ news.php [R=301,L]
+RewriteRule ^Contact_School_index\.html$ contact.php [R=301,L]
+RewriteRule ^Faculty_and_Staff_School_index\.html$ faculty.php [R=301,L]
+RewriteRule ^Alumni_School_index\.html$ alumni.php [R=301,L]
+RewriteRule ^Academic_SH_School_index\.html$ academics/senior-high.php [R=301,L]
