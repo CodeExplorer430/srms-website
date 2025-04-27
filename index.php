@@ -10,7 +10,17 @@ $slideshow_images = $db->fetch_all("SELECT * FROM slideshow WHERE is_active = TR
 
 // Get facilities
 $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order ASC");
+
+// Define the hero background image path
+$hero_background = '/assets/images/campus/hero-background.jpg';
 ?>
+
+<!-- Custom inline style for the hero section background -->
+<style>
+    .enr {
+        background-image: linear-gradient(rgba(6, 52, 150, 0.658), rgba(6, 52, 150, 0.658)), url('<?php echo SITE_URL . $hero_background; ?>');
+    }
+</style>
 
 <section class="enr">
     <h6>ST. RAPHAELA MARY SCHOOL</h6>
@@ -56,13 +66,39 @@ $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order AS
     </div>
 
     <ul class="faci-pics">
-        <?php foreach($facilities as $facility): ?>
-        <li>
-            <img src="<?php echo SITE_URL . $facility['image']; ?>" alt="<?php echo $facility['name']; ?>">
-            <h3><?php echo $facility['name']; ?></h3>
-            <p><?php echo $facility['description']; ?></p>
-        </li>
-        <?php endforeach; ?>
+        <?php if (empty($facilities)): ?>
+            <li>
+                <img src="<?php echo SITE_URL; ?>/assets/images/facilities/library.jpg" alt="Library">
+                <h3>LIBRARY</h3>
+                <p>Our school library is a welcoming space designed to inspire lifelong learning.</p>
+            </li>
+            <li>
+                <img src="<?php echo SITE_URL; ?>/assets/images/facilities/gymnasium.jpg" alt="Gymnasium">
+                <h3>GYMNASIUM</h3>
+                <p>Our gymnasium is dedicated to fostering a passion for sports and wellness in all of our students.</p>
+            </li>
+            <li>
+                <img src="<?php echo SITE_URL; ?>/assets/images/facilities/canteen.jpg" alt="Canteen">
+                <h3>CANTEEN</h3>
+                <p>Our school canteen provides nutritious meals in a positive and healthy environment.</p>
+            </li>
+        <?php else: ?>
+            <?php foreach($facilities as $facility): ?>
+                <li>
+                    <?php 
+                    $image_path = SITE_URL . $facility['image'];
+                    $default_image = SITE_URL . '/assets/images/facilities/' . strtolower($facility['name']) . '.jpg';
+                    if (file_exists($_SERVER['DOCUMENT_ROOT'] . $facility['image'])): 
+                    ?>
+                        <img src="<?php echo $image_path; ?>" alt="<?php echo $facility['name']; ?>">
+                    <?php else: ?>
+                        <img src="<?php echo $default_image; ?>" alt="<?php echo $facility['name']; ?>">
+                    <?php endif; ?>
+                    <h3><?php echo $facility['name']; ?></h3>
+                    <p><?php echo $facility['description']; ?></p>
+                </li>
+            <?php endforeach; ?>
+        <?php endif; ?>
     </ul>
 </section>
 

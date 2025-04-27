@@ -289,6 +289,18 @@ CREATE TABLE `social_media` (
   `is_active` BOOLEAN DEFAULT TRUE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Submission Replies Table
+
+CREATE TABLE IF NOT EXISTS `submission_replies` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `submission_id` INT NOT NULL,
+  `admin_id` INT NOT NULL,
+  `reply_content` TEXT NOT NULL,
+  `reply_date` DATETIME NOT NULL,
+  FOREIGN KEY (`submission_id`) REFERENCES `contact_submissions`(`id`) ON DELETE CASCADE,
+  FOREIGN KEY (`admin_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Create database indexes for performance optimization
 -- Index for frequently queried columns
 CREATE INDEX idx_news_published_date ON news(published_date);

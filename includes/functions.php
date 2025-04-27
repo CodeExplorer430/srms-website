@@ -164,6 +164,13 @@ function get_image_path($image_path, $type = 'general', $gender = 'neutral') {
     return $image_path;
 }
 
+/**
+ * Safe query execution with error handling
+ * 
+ * @param string $sql The SQL query to execute
+ * @param array $fallback_data Data to return in case of failure
+ * @return mixed Query result or fallback data
+ */
 function safe_query($sql, $fallback_data = []) {
     try {
         $db = db_connect();
@@ -178,4 +185,356 @@ function safe_query($sql, $fallback_data = []) {
         return $fallback_data;
     }
 }
-?>
+
+/**
+ * Get image path with fallback if file doesn't exist
+ * 
+ * @param string $image_path Primary image path
+ * @param string $fallback_path Fallback image path
+ * @param string $default_type Type of image (facility, news, etc.)
+ * @param string $name Name to use for default image
+ * @return string Valid image path
+ */
+function get_image_with_fallback($image_path, $fallback_path = '', $default_type = '') {
+    // If image path is empty, use fallback
+    if (empty($image_path)) {
+        return SITE_URL . $fallback_path;
+    }
+    
+    // Normalize the path
+    $image_path = normalize_image_path($image_path);
+    
+    // Check if file exists - try multiple path variations
+    $image_exists = verify_image_exists($image_path);
+    
+    if ($image_exists) {
+        return SITE_URL . $image_path;
+    }
+    
+    // Try to find a matching file by pattern
+    $dir_path = dirname($_SERVER['DOCUMENT_ROOT'] . $image_path);
+    $basename = basename($image_path);
+    
+    // If directory exists, try to find files with similar name pattern
+    if (is_dir($dir_path)) {
+        $files = scandir($dir_path);
+        $base_name_pattern = preg_replace('/[0-9]+/', '', pathinfo($basename, PATHINFO_FILENAME));
+        $extension = pathinfo($basename, PATHINFO_EXTENSION);
+        
+        foreach ($files as $file) {
+            if (strpos($file, $base_name_pattern) !== false && 
+                pathinfo($file, PATHINFO_EXTENSION) === $extension) {
+                return SITE_URL . dirname($image_path) . '/' . $file;
+            }
+        }
+    }
+    
+    // Last resort: return the fallback
+    return SITE_URL . $fallback_path;
+}
+
+/**
+ * Get fallback image based on type
+ */
+function get_fallback_image($fallback_path = '', $default_type = '', $name = '') {
+    // If fallback is provided and exists, use it
+    if (!empty($fallback_path) && file_exists($_SERVER['DOCUMENT_ROOT'] . $fallback_path)) {
+        return SITE_URL . $fallback_path;
+    }
+    
+    // Try to use a type-based default
+    if (!empty($default_type)) {
+        $type_defaults = [
+            'facility' => '/assets/images/facilities/' . (empty($name) ? 'placeholder-facility.jpg' : strtolower($name) . '.jpg'),
+            'news' => '/assets/images/news/announcement-01.jpg',
+            'campus' => '/assets/images/campus/hero-main.jpg',
+            'default' => '/assets/images/placeholder.jpg'
+        ];
+        
+        $default_path = isset($type_defaults[$default_type]) ? $type_defaults[$default_type] : $type_defaults['default'];
+        if (file_exists($_SERVER['DOCUMENT_ROOT'] . $default_path)) {
+            return SITE_URL . $default_path;
+        }
+    }
+    
+    // Ultimate fallback - use a placeholder
+    return SITE_URL . '/assets/images/placeholder.jpg';
+}
+
+/**
+ * Debug image paths and existence
+ * Used to troubleshoot image loading issues
+ */
+function debug_image_path($image_path) {
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $full_path = $server_root . $image_path;
+    
+    $debug_info = [
+        'image_path' => $image_path,
+        'server_root' => $server_root,
+        'full_path' => $full_path,
+        'path_exists' => file_exists($full_path),
+        'is_file' => is_file($full_path),
+        'is_readable' => is_readable($full_path)
+    ];
+    
+    // Log to error log
+    error_log('Image Debug: ' . json_encode($debug_info));
+    
+    return $debug_info;
+}
+
+/**
+ * Standardize image path formatting for consistent handling
+ * 
+ * @param string $image_path The image path to standardize
+ * @return string Standardized image path
+ */
+function standardize_image_path($image_path) {
+    if (empty($image_path)) {
+        return '';
+    }
+    
+    // If it's already a full URL, return as is
+    if (filter_var($image_path, FILTER_VALIDATE_URL)) {
+        return $image_path;
+    }
+    
+    // Make sure path starts with a slash
+    if (strpos($image_path, '/') !== 0) {
+        $image_path = '/' . $image_path;
+    }
+    
+    // Remove any double slashes
+    return preg_replace('#/+#', '/', $image_path);
+}
+
+/**
+ * Check if image exists with better error logging
+ * 
+ * @param string $image_path Path to check
+ * @return bool True if image exists
+ */
+function image_exists($image_path) {
+    if (empty($image_path)) {
+        return false;
+    }
+    
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $full_path = $server_root . $image_path;
+    
+    // Try alternative path formats
+    $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($image_path, '/');
+    
+    $exists = file_exists($full_path) || file_exists($alt_path);
+    
+    if (!$exists) {
+        // Log issue for debugging
+        error_log("Image not found: {$image_path}. Tried paths: {$full_path} and {$alt_path}");
+    }
+    
+    return $exists;
+}
+
+/**
+ * Check if file exists, allowing for some flexibility in path formats
+ * and case-sensitive filesystems.
+ *
+ * Tries the following:
+ * 1. Direct path
+ * 2. With and without leading slash
+ * 3. Different case variations (useful on case-sensitive filesystems)
+ *
+ * @param string $image_path Path to check
+ * @return bool True if file exists
+ */
+function file_exists_with_alternatives($image_path) {
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    
+    // Try direct path
+    if (file_exists($server_root . $image_path)) {
+        return true;
+    }
+    
+    // Try with and without leading slash
+    $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($image_path, '/');
+    if (file_exists($alt_path)) {
+        return true;
+    }
+    
+    // Try different case variations (useful on case-sensitive filesystems)
+    $basename = basename($image_path);
+    $dirname = dirname($image_path);
+    
+    if (is_dir($server_root . $dirname)) {
+        $files = scandir($server_root . $dirname);
+        foreach ($files as $file) {
+            if (strtolower($file) === strtolower($basename)) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Normalize image paths for consistent handling
+ */
+function normalize_image_path($path) {
+    if (empty($path)) return '';
+    
+    // If it's a URL, leave it unchanged
+    if (filter_var($path, FILTER_VALIDATE_URL)) return $path;
+    
+    // Ensure path starts with slash
+    $path = '/' . ltrim($path, '/');
+    
+    // Convert legacy paths to new structure
+    if (strpos($path, '/images/School_Events') !== false) {
+        $basename = basename($path);
+        $event_number = preg_replace('/[^0-9]/', '', $basename);
+        $ext = pathinfo($basename, PATHINFO_EXTENSION);
+        $path = '/assets/images/events/event-' . $event_number . '.' . $ext;
+    } else if (strpos($path, '/images/School_Announcement') !== false) {
+        $basename = basename($path);
+        $announcement_number = preg_replace('/[^0-9]/', '', $basename);
+        $ext = pathinfo($basename, PATHINFO_EXTENSION);
+        $path = '/assets/images/news/announcement-' . $announcement_number . '.' . $ext;
+    }
+    
+    // Clean up double slashes
+    return preg_replace('#/+#', '/', $path);
+}
+
+/**
+ * Enhanced file existence check with detailed logging
+ */
+function verify_image_exists($image_path) {
+    if (empty($image_path)) return false;
+    
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $paths_to_check = [
+        $server_root . $image_path,
+        $server_root . DIRECTORY_SEPARATOR . ltrim($image_path, '/'),
+        // Try without 'assets' folder (legacy structure)
+        $server_root . str_replace('/assets/', '/', $image_path),
+        // Try with 'assets' folder (new structure)
+        $server_root . str_replace('/images/', '/assets/images/', $image_path)
+    ];
+    
+    foreach ($paths_to_check as $path) {
+        if (file_exists($path)) {
+            return $path; // Return the actual path that exists
+        }
+    }
+    
+    // Log the issue
+    error_log("Image not found: {$image_path}. Tried paths: " . implode(', ', $paths_to_check));
+    return false;
+}
+
+
+/**
+ * Upload image to specified category directory
+ * 
+ * @param array $file The $_FILES array element for the uploaded file
+ * @param string $category The category directory to store the file in
+ * @return string|false Path to the uploaded file on success, false on failure
+ */
+function upload_image($file, $category = 'news') {
+    // Log upload attempt for debugging
+    error_log("Upload attempt for category: {$category}, file type: {$file['type']}, size: {$file['size']}");
+
+    // Validate file type
+    $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+    if (!in_array($file['type'], $allowed_types)) {
+        error_log("Invalid file type: {$file['type']}");
+        return false;
+    }
+    
+    // Validate file size (2MB max)
+    if ($file['size'] > 2 * 1024 * 1024) {
+        error_log("File too large: {$file['size']}");
+        return false;
+    }
+    
+    // Create target directory if it doesn't exist
+    $target_dir = $_SERVER['DOCUMENT_ROOT'] . '/assets/images/' . $category . '/';
+    if (!is_dir($target_dir)) {
+        if (!mkdir($target_dir, 0755, true)) {
+            error_log("Failed to create directory: {$target_dir}");
+            return false;
+        }
+    }
+    
+    // Generate unique filename
+    $filename = pathinfo($file['name'], PATHINFO_FILENAME);
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $unique_name = $filename . '-' . time() . '.' . $extension;
+    
+    // Set target path
+    $target_path = $target_dir . $unique_name;
+    $relative_path = '/assets/images/' . $category . '/' . $unique_name;
+    
+    // Upload file
+    if (move_uploaded_file($file['tmp_name'], $target_path)) {
+        error_log("File uploaded successfully to {$target_path}");
+        return $relative_path;
+    } else {
+        error_log("Failed to move uploaded file to {$target_path}");
+        return false;
+    }
+}
+
+/**
+ * Find best matching image in a directory
+ * Helps resolve issues when filenames contain unique IDs
+ * 
+ * @param string $image_path Original image path
+ * @return string|bool Actual file path if found, false otherwise
+ */
+function find_best_matching_image($image_path) {
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $dir_path = dirname($server_root . $image_path);
+    $base_filename = pathinfo(basename($image_path), PATHINFO_FILENAME);
+    $extension = pathinfo(basename($image_path), PATHINFO_EXTENSION);
+    
+    // If directory doesn't exist
+    if (!is_dir($dir_path)) {
+        error_log("Directory not found: " . $dir_path);
+        return false;
+    }
+    
+    // Get all files in the directory
+    $files = scandir($dir_path);
+    if (!$files) {
+        error_log("Failed to scan directory: " . $dir_path);
+        return false;
+    }
+    
+    // First check for exact match
+    if (in_array(basename($image_path), $files)) {
+        return $image_path;
+    }
+    
+    // Look for pattern match with exact base name (ignoring unique suffix)
+    foreach ($files as $file) {
+        $file_base = pathinfo($file, PATHINFO_FILENAME);
+        if (strpos($file_base, $base_filename) === 0 && 
+            pathinfo($file, PATHINFO_EXTENSION) === $extension) {
+            return dirname($image_path) . '/' . $file;
+        }
+    }
+    
+    // Look for any file with similar pattern (case insensitive)
+    foreach ($files as $file) {
+        if (stripos($file, $base_filename) !== false && 
+            strtolower(pathinfo($file, PATHINFO_EXTENSION)) === strtolower($extension)) {
+            return dirname($image_path) . '/' . $file;
+        }
+    }
+    
+    error_log("No matching image found for: " . $image_path);
+    return false;
+}

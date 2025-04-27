@@ -3,6 +3,8 @@ $page_title = 'Contact Us';
 $page_description = 'Get in touch with St. Raphaela Mary School. Contact information, location, and online inquiry form.';
 
 include 'includes/header.php';
+// Include the MailService class
+require_once 'includes/MailService.php';
 
 $db = db_connect();
 $contact_info = $db->fetch_row("SELECT * FROM contact_information LIMIT 1");
@@ -55,15 +57,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         if($db->query($sql)) {
             $form_success = true;
             
-            // Optional: Send email notification to admin
-            $admin_email = ADMIN_EMAIL;
-            $email_subject = "New Contact Form Submission: $subject";
-            $email_body = "Name: $name\n";
-            $email_body .= "Email: $email\n";
-            $email_body .= "Phone: $phone\n\n";
-            $email_body .= "Message:\n$message";
+            // Send email notification using our MailService class
+            $emailResult = MailService::sendContactNotification($name, $email, $phone, $subject, $message);
             
-            mail($admin_email, $email_subject, $email_body);
+            // If email fails, log it but don't show error to user
+            if (!$emailResult['success']) {
+                error_log("Email notification failed: " . $emailResult['message']);
+            }
         } else {
             $form_errors[] = 'An error occurred. Please try again later.';
         }
@@ -146,6 +146,31 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit" class="submit-btn">Send Message</button>
         </form>
     </div>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        <?php if($form_submitted && $form_success): ?>
+        // Get the form element
+        const contactForm = document.querySelector('.contact-form');
+        
+        // Reset all form fields
+        contactForm.reset();
+        
+        // Scroll to the success message for better visibility
+        const successMessage = document.querySelector('.success-message');
+        if (successMessage) {
+            successMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Set focus to the first form field after a short delay
+            setTimeout(function() {
+                const firstInput = contactForm.querySelector('input:not([type="submit"])');
+                if (firstInput) {
+                    firstInput.focus();
+                }
+            }, 1000);
+        }
+        <?php endif; ?>
+    });
+</script>
 </section>
 
 <?php include 'includes/footer.php'; ?>

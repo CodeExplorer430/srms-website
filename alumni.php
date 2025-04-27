@@ -5,10 +5,11 @@ $page_description = 'Connect with the St. Raphaela Mary School alumni community.
 include 'includes/header.php';
 ?>
 
+
 <section class="main-head">
     <h1>ALUMNI ASSOCIATION</h1>
+    <p>Connect with fellow Raphaelians and stay updated with alumni activities</p>
 </section>
-
 <main>
     <div class="alumni-container">
         <div class="welcome-message">
@@ -19,7 +20,7 @@ include 'includes/header.php';
         </div>
 
         <div class="alumni-benefits">
-            <h2>Alumni Benefits</h2>
+            <h2><i class='bx bx-award'></i> Alumni Benefits</h2>
             <ul>
                 <li><strong>Networking Opportunities:</strong> Connect with fellow graduates for professional development and social connections</li>
                 <li><strong>School Events:</strong> Special invitations to school functions and reunions</li>
@@ -29,7 +30,7 @@ include 'includes/header.php';
         </div>
 
         <div class="upcoming-events">
-            <h2>Upcoming Alumni Events</h2>
+            <h2><i class='bx bx-calendar-event'></i> Upcoming Alumni Events</h2>
             <div class="event-card">
                 <h3>Annual Homecoming 2025</h3>
                 <p><strong>Date:</strong> July 15, 2025</p>
@@ -45,7 +46,7 @@ include 'includes/header.php';
         </div>
 
         <div class="alumni-registration">
-            <h2>Join the Alumni Network</h2>
+            <h2><i class='bx bx-user-plus'></i> Join the Alumni Network</h2>
             <p>We're building a comprehensive database of our alumni. Please take a moment to register or update your information:</p>
             <div class="cta-button">
                 <a href="#" class="register-btn">Register/Update Info</a>

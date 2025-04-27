@@ -92,25 +92,63 @@ function initSlideshow() {
  * Enhances responsive design for mobile devices
  */
 function initMobileMenu() {
-    // Create mobile menu button if it doesn't exist
-    if (!document.querySelector('.mobile-menu-toggle')) {
-        const header = document.querySelector('header');
+  // Create mobile menu button if it doesn't exist
+  if (!document.querySelector('.mobile-menu-toggle')) {
+    const header = document.querySelector('header');
         
-        if (!header) return;
+    if (!header) return;
         
-        // Create mobile menu toggle button
-        const mobileMenuToggle = document.createElement('div');
-        mobileMenuToggle.className = 'mobile-menu-toggle';
-        mobileMenuToggle.innerHTML = '<span></span><span></span><span></span>';
+    // Create mobile menu toggle button
+    const mobileMenuToggle = document.createElement('div');
+    mobileMenuToggle.className = 'mobile-menu-toggle';
+    mobileMenuToggle.innerHTML = '<span></span><span></span><span></span>';
         
-        // Add mobile menu toggle to header
-        header.appendChild(mobileMenuToggle);
+    // Add mobile menu toggle to header
+    header.appendChild(mobileMenuToggle);
         
-        // Toggle mobile menu on click
-        mobileMenuToggle.addEventListener('click', function() {
-            const menuLinks = document.querySelector('.menu-link');
-            menuLinks.classList.toggle('active');
-            this.classList.toggle('active');
-        });
-    }
+     // Toggle mobile menu on click
+     mobileMenuToggle.addEventListener('click', function() {
+      const menuLinks = document.querySelector('.menu-link');
+      menuLinks.classList.toggle('active');
+      this.classList.toggle('active');
+  });
+}
+
+/**
+ * Adjust table columns based on screen size
+ * Hides less important columns on mobile devices for better readability
+ */
+function adjustTableColumns() {
+  const table = document.getElementById('usersTable');
+  
+  // Guard clause - only proceed if table exists
+  if (!table) return;
+  
+  const windowWidth = window.innerWidth;
+  
+  if (windowWidth < 768) {
+      // Hide less important columns on mobile
+      const hideCols = [2, 4]; // Role and Last Login columns
+      for (let i = 0; i < table.rows.length; i++) {
+          const cells = table.rows[i].cells;
+          for (let j = 0; j < hideCols.length; j++) {
+              if (cells[hideCols[j]]) {
+                  cells[hideCols[j]].style.display = 'none';
+              }
+          }
+      }
+  } else {
+      // Show all columns on larger screens
+      for (let i = 0; i < table.rows.length; i++) {
+          const cells = table.rows[i].cells;
+          for (let j = 0; j < cells.length; j++) {
+              cells[j].style.display = '';
+          }
+      }
+  }
+}
+  
+  // Call on page load and resize
+  window.addEventListener('load', adjustTableColumns);
+  window.addEventListener('resize', adjustTableColumns);
 }

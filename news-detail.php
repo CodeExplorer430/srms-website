@@ -12,6 +12,39 @@ if ($article_id <= 0) {
 include_once 'includes/config.php';
 include_once 'includes/functions.php';
 
+function prepare_image_for_display($image_path) {
+    // If path is empty, return a default image
+    if (empty($image_path)) {
+        return '/assets/images/news/news-placeholder.jpg';
+    }
+    
+    // Normalize path format
+    $image_path = '/' . ltrim($image_path, '/');
+    
+    // Verify the image exists (use the functions already in your code)
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $full_path = $server_root . $image_path;
+    
+    if (file_exists($full_path)) {
+        return $image_path;
+    }
+    
+    // Try alternative paths if the direct path doesn't work
+    $alt_paths = [
+        str_replace('/assets/images/', '/images/', $image_path),
+        str_replace('/images/', '/assets/images/', $image_path)
+    ];
+    
+    foreach ($alt_paths as $alt_path) {
+        if (file_exists($server_root . $alt_path)) {
+            return $alt_path;
+        }
+    }
+    
+    // Return default if no valid path is found
+    return '/assets/images/news/news-placeholder.jpg';
+}
+
 // Fetch article data
 $db = db_connect();
 $article = $db->fetch_row("SELECT * FROM news WHERE id = $article_id AND status = 'published'");
@@ -60,11 +93,9 @@ $related_articles = $db->fetch_all($related_query);
             </div>
         </div>
         
-        <?php if ($article['image']): ?>
         <div class="article-image">
-            <img src="<?php echo SITE_URL . $article['image']; ?>" alt="<?php echo htmlspecialchars($article['title']); ?>">
+            <img src="<?php echo prepare_image_for_display($article['image']); ?>" alt="<?php echo htmlspecialchars($article['title']); ?>">
         </div>
-        <?php endif; ?>
         
         <div class="article-content">
             <?php echo nl2br(htmlspecialchars($article['content'])); ?>
@@ -89,7 +120,7 @@ $related_articles = $db->fetch_all($related_query);
                 <?php foreach($related_articles as $related): ?>
                 <div class="related-item">
                     <a href="news-detail.php?id=<?php echo $related['id']; ?>">
-                        <img src="<?php echo SITE_URL . $related['image']; ?>" alt="<?php echo htmlspecialchars($related['title']); ?>">
+                        <img src="<?php echo prepare_image_for_display($related['image']); ?>" alt="<?php echo htmlspecialchars($related['title']); ?>">
                         <h4><?php echo htmlspecialchars($related['title']); ?></h4>
                         <span class="date"><?php echo date('F j, Y', strtotime($related['published_date'])); ?></span>
                     </a>

@@ -659,6 +659,118 @@ $users = $db->fetch_all("SELECT * FROM users ORDER BY username");
             margin: 0;
             padding-left: 20px;
         }
+        @media screen and (max-width: 992px) {
+            .users-table-container {
+                overflow-x: auto;
+            }
+            
+            .users-table {
+                min-width: 900px;
+            }
+        }
+
+        @media screen and (max-width: 767px) {
+            .users-table-container {
+                display: none;
+            }
+            
+            .users-card-container {
+                display: block;
+                margin-bottom: 20px;
+            }
+            
+            .users-card-container .user-card {
+                background-color: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+                padding: 20px;
+                margin-bottom: 15px;
+                position: relative;
+            }
+            
+            .user-card-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 15px;
+            }
+            
+            .user-name {
+                font-weight: 600;
+                color: #0a3060;
+                font-size: 16px;
+            }
+            
+            .user-role {
+                display: inline-block;
+                font-size: 12px;
+                font-weight: 500;
+                padding: 3px 8px;
+                border-radius: 50px;
+            }
+            
+            .user-details {
+                margin-bottom: 15px;
+            }
+            
+            .user-details p {
+                display: flex;
+                justify-content: space-between;
+                margin: 0;
+                padding: 8px 0;
+                border-bottom: 1px solid #f1f3f5;
+                font-size: 14px;
+            }
+            
+            .user-details strong {
+                color: #495057;
+            }
+            
+            .user-card-actions {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+            }
+            
+            .user-card-actions button, 
+            .user-card-actions a {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 8px;
+                border-radius: 4px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            
+            .pagination {
+                justify-content: center;
+            }
+            
+            /* Action bar responsive fixes */
+            .action-bar {
+                flex-direction: column;
+            }
+            
+            .action-bar .left {
+                width: 100%;
+                margin-bottom: 15px;
+            }
+            
+            .action-bar .search-box {
+                width: 100%;
+                margin-right: 0;
+            }
+            
+            .action-bar .search-box input {
+                width: 100%;
+            }
+            
+            .add-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
     </style>
 </head>
 <body>
@@ -836,6 +948,74 @@ $users = $db->fetch_all("SELECT * FROM users ORDER BY username");
                         <?php endif; ?>
                     </tbody>
                 </table>
+                <div class="users-card-container" style="display: none;">
+                    <?php if(empty($users)): ?>
+                        <div style="text-align: center; padding: 30px; color: #6c757d;">
+                            <i class='bx bx-user-x' style="font-size: 48px; margin-bottom: 10px;"></i>
+                            <p>No users found.</p>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach($users as $user): ?>
+                            <div class="user-card">
+                                <div class="user-card-header">
+                                    <div class="user-name"><?php echo htmlspecialchars($user['username']); ?></div>
+                                    <span class="user-role role-badge role-<?php echo $user['role']; ?>">
+                                        <?php 
+                                            switch($user['role']) {
+                                                case 'admin':
+                                                    echo 'Administrator';
+                                                    break;
+                                                case 'content_manager':
+                                                    echo 'Content Manager';
+                                                    break;
+                                                default:
+                                                    echo 'Editor';
+                                            }
+                                        ?>
+                                    </span>
+                                </div>
+                                <div class="user-details">
+                                    <p>
+                                        <strong>Email:</strong>
+                                        <span><?php echo htmlspecialchars($user['email']); ?></span>
+                                    </p>
+                                    <p>
+                                        <strong>Status:</strong>
+                                        <span class="<?php echo $user['active'] ? 'status-active' : 'status-inactive'; ?>">
+                                            <?php echo $user['active'] ? 'Active' : 'Inactive'; ?>
+                                        </span>
+                                    </p>
+                                    <p>
+                                        <strong>Last Login:</strong>
+                                        <span><?php echo $user['last_login'] ? date('M j, Y g:i A', strtotime($user['last_login'])) : 'Never'; ?></span>
+                                    </p>
+                                </div>
+                                
+                                <div class="user-card-actions">
+                                    <button type="button" class="action-btn edit-link edit-user-btn" data-id="<?php echo $user['id']; ?>">
+                                        <i class='bx bxs-edit'></i> Edit
+                                    </button>
+                                    
+                                    <?php if($user['id'] !== (int)$_SESSION['admin_user_id']): ?>
+                                        <?php if($user['active']): ?>
+                                            <a href="users.php?action=toggle_status&id=<?php echo $user['id']; ?>" class="action-btn deactivate-link" onclick="return confirm('Are you sure you want to deactivate this user?')">
+                                                <i class='bx bxs-x-circle'></i> Deactivate
+                                            </a>
+                                        <?php else: ?>
+                                            <a href="users.php?action=toggle_status&id=<?php echo $user['id']; ?>" class="action-btn activate-link">
+                                                <i class='bx bxs-check-circle'></i> Activate
+                                            </a>
+                                        <?php endif; ?>
+                                        
+                                        <a href="users.php?action=delete&id=<?php echo $user['id']; ?>" class="action-btn delete-link" onclick="return confirm('Are you sure you want to delete this user?')" style="grid-column: span 2;">
+                                            <i class='bx bxs-trash'></i> Delete
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
             
             <div class="pagination">
@@ -952,11 +1132,14 @@ $users = $db->fetch_all("SELECT * FROM users ORDER BY username");
         
         // Edit user button click
         document.addEventListener('click', function(e) {
-            if (e.target.classList.contains('edit-user-btn') || e.target.parentElement.classList.contains('edit-user-btn')) {
-                const btn = e.target.classList.contains('edit-user-btn') ? e.target : e.target.parentElement;
+            if (e.target.classList.contains('edit-user-btn') || 
+                e.target.parentElement.classList.contains('edit-user-btn')) {
+                
+                const btn = e.target.classList.contains('edit-user-btn') ? 
+                            e.target : e.target.parentElement;
                 const userId = btn.dataset.id;
                 
-                // Fetch user data
+                // Fetch user data and show modal as before
                 fetch(`users.php?ajax_action=get_user&id=${userId}`)
                     .then(response => response.json())
                     .then(data => {
@@ -1040,6 +1223,63 @@ $users = $db->fetch_all("SELECT * FROM users ORDER BY username");
                     }
                 }
             }
+        });
+        function handleResponsiveLayout() {
+            const tableContainer = document.querySelector('.users-table-container');
+            const cardContainer = document.querySelector('.users-card-container');
+            
+            if (window.innerWidth <= 767) {
+                tableContainer.style.display = 'none';
+                cardContainer.style.display = 'block';
+            } else {
+                tableContainer.style.display = 'block';
+                cardContainer.style.display = 'none';
+            }
+        }
+        
+        // Run on page load and on resize
+        window.addEventListener('load', handleResponsiveLayout);
+        window.addEventListener('resize', handleResponsiveLayout);
+        
+        // Make sure search works for both table and card views
+        searchInput.addEventListener('keyup', function() {
+            const searchValue = this.value.toLowerCase();
+            
+            // Table rows
+            const rows = usersTable.getElementsByTagName('tr');
+            for (let i = 1; i < rows.length; i++) {
+                const usernameCell = rows[i].getElementsByTagName('td')[0];
+                const emailCell = rows[i].getElementsByTagName('td')[1];
+                
+                if (usernameCell && emailCell) {
+                    const username = usernameCell.textContent.toLowerCase();
+                    const email = emailCell.textContent.toLowerCase();
+                    
+                    if (username.indexOf(searchValue) > -1 || email.indexOf(searchValue) > -1) {
+                        rows[i].style.display = '';
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+            }
+            
+            // Card view
+            const cards = document.querySelectorAll('.user-card');
+            cards.forEach(card => {
+                const nameElement = card.querySelector('.user-name');
+                const emailElement = card.querySelector('.user-details p:nth-child(1) span');
+                
+                if (nameElement && emailElement) {
+                    const username = nameElement.textContent.toLowerCase();
+                    const email = emailElement.textContent.toLowerCase();
+                    
+                    if (username.indexOf(searchValue) > -1 || email.indexOf(searchValue) > -1) {
+                        card.style.display = '';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                }
+            });
         });
     </script>
 </body>
