@@ -4,13 +4,19 @@ class Database {
     
     // Constructor establishes database connection
     public function __construct() {
-        $this->connection = new mysqli(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME, DB_PORT);
-        
-        if($this->connection->connect_error) {
-            die("Connection failed: " . $this->connection->connect_error);
+        try {
+            $this->connection = new mysqli(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME, DB_PORT);
+            
+            if($this->connection->connect_error) {
+                throw new Exception("Connection failed: " . $this->connection->connect_error);
+            }
+            
+            $this->connection->set_charset("utf8mb4");
+        } catch (Exception $e) {
+            // Log error and provide better error message
+            error_log("Database connection error: " . $e->getMessage());
+            die("Database connection failed. Please check your configuration in environment.php and ensure your database server is running.");
         }
-        
-        $this->connection->set_charset("utf8mb4");
     }
     
     // Execute query

@@ -11,6 +11,7 @@ This project is a custom-developed website for St. Raphaela Mary School, offerin
 - **Responsive Design**: Fully responsive layout that works seamlessly across desktops, tablets, and mobile devices
 - **Dynamic Content Management**: Backend system for managing site content
 - **User Authentication**: Secure login system with role-based access control
+- **Cross-Platform Compatibility**: Works seamlessly across Windows and Linux environments
 - **School Information Pages**: Dedicated sections for:
   - About the school (mission, vision, philosophy)
   - Academic programs (Preschool to Senior High School)
@@ -21,6 +22,7 @@ This project is a custom-developed website for St. Raphaela Mary School, offerin
 - **Interactive Elements**: Slideshow, navigation menus, and mobile-friendly interfaces
 - **Admission Management**: Online enrollment information and requirements
 - **News Management**: System for creating and publishing school news and announcements
+- **Media Library**: Comprehensive media management with cross-platform file handling
 
 ## Technologies Used
 
@@ -32,21 +34,22 @@ This project is a custom-developed website for St. Raphaela Mary School, offerin
   - Box Icons library
 
 - **Backend**:
-  - PHP (implied from database structure)
+  - PHP 7.4+
   - MySQL/MariaDB database
+  - Environment-aware configuration system
 
-- **Database**:
-  - Normalized relational database design
-  - Transaction support
-  - Referential integrity
+- **Development Environments**:
+  - Windows: WAMP Server or XAMPP
+  - Linux: XAMPP or LAMP stack
 
 ## Installation
 
 ### Prerequisites
 
-- Web server (Apache/Nginx)
+- Web server (Apache)
 - PHP 7.4 or higher
 - MySQL 5.7/MariaDB 10.3 or higher
+- WAMP or XAMPP (for Windows) or XAMPP or LAMP (for Linux)
 
 ### Setup Instructions
 
@@ -55,78 +58,123 @@ This project is a custom-developed website for St. Raphaela Mary School, offerin
 2. **Database Setup**:
    ```bash
    # Create the database
-   mysql -u username -p < srms_database_schema.sql
+   mysql -u username -p < database/srms_database_schema.sql
    
    # Populate with initial data
-   mysql -u username -p < srms_database_population.sql
+   mysql -u username -p < database/srms_database_population.sql
    ```
 
-3. **Configure Database Connection**:
-   - Create or edit the database configuration file (e.g., `config.php`)
-   - Update with your database credentials
+3. **Configure Environment Settings**:
+   - Copy `environment-sample.php` to `environment.php`
+   - Update database configuration based on your environment:
 
    ```php
    <?php
-   define('DB_SERVER', 'localhost');
-   define('DB_USERNAME', 'your_username');
-   define('DB_PASSWORD', 'your_password');
-   define('DB_NAME', 'srms_database');
+   // Detect operating system and set environment-specific configurations
+   define('IS_WINDOWS', strtoupper(substr(PHP_OS, 0, 3)) === 'WIN');
    
-   $conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_NAME);
+   // Define OS-specific constants
+   define('DS', DIRECTORY_SEPARATOR);
    
-   if($conn === false) {
-       die("ERROR: Could not connect. " . mysqli_connect_error());
+   // Set environment-specific database configurations
+   if (IS_WINDOWS) {
+       // Windows (WAMP) configuration
+       define('DB_SERVER', 'localhost');
+       define('DB_USERNAME', 'root');
+       define('DB_PORT', '3308'); // Your WAMP MySQL port
+       define('DB_PASSWORD', '');
+       define('DB_NAME', 'srms_database');
+   } else {
+       // Linux (XAMPP) configuration
+       define('DB_SERVER', 'localhost');
+       define('DB_USERNAME', 'root');
+       define('DB_PORT', '3306'); // Default MySQL port on Linux XAMPP
+       define('DB_PASSWORD', '');
+       define('DB_NAME', 'srms_database');
    }
    ?>
    ```
 
 4. **Set Proper Permissions**:
-   ```bash
-   # For Linux/Unix systems
-   chmod 755 -R /path/to/website
-   chmod 644 /path/to/website/config.php
-   ```
+   - For Windows (WAMP):
+     - No special permissions required
+   
+   - For Linux (XAMPP):
+     ```bash
+     sudo chmod -R 755 /opt/lampp/htdocs/srms-website
+     sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets/images
+     sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets/uploads
+     ```
 
-5. **Configure Web Server**:
-   - Set the document root to the project's public directory
-   - Ensure proper URL rewriting for clean URLs
+5. **Run Environment Check**:
+   - Navigate to `http://localhost/srms-website/admin/check-environment.php`
+   - Ensure all checks pass (database connection, directory permissions, etc.)
+   - Fix any reported issues before proceeding
+
+6. **Setup Directories**:
+   - Navigate to `http://localhost/srms-website/admin/maintenance/setup-directories.php`
+   - This will create required directories and placeholder images
 
 ## File Structure
 
 ```
 srms-website/
 │
-├── css/
-│   └── styles.css              # Main stylesheet
+├── admin/                      # Admin panel
+│   ├── ajax/                   # AJAX handlers
+│   │   ├── bulk-upload.php     # Bulk media upload handler
+│   │   └── upload-media.php    # Single media upload handler
+│   ├── maintenance/            # Maintenance tools
+│   │   └── setup-directories.php # Directory setup utility
+│   ├── check-environment.php   # Environment diagnostic tool
+│   └── media-manager.php       # Media library management
 │
-├── js/
-│   └── main.js                 # Main JavaScript functionality
+├── assets/                     # Assets directory
+│   ├── css/                    # CSS files
+│   ├── js/                     # JavaScript files
+│   └── images/                 # Image directories
+│       ├── news/               # News images
+│       ├── events/             # Event images
+│       ├── campus/             # Campus images
+│       ├── facilities/         # Facilities images
+│       └── promotional/        # Promotional images
 │
-├── images/                     # Image assets directory
+├── database/                   # Database files
 │
 ├── includes/                   # PHP includes/components
-│   ├── config.php              # Database configuration
-│   ├── header.php              # Common header
-│   ├── footer.php              # Common footer
-│   └── db.php                  # Database connection
+│   ├── config.php              # Configuration loader
+│   ├── db.php                  # Database class
+│   └── functions.php           # Common functions
 │
-├── admin/                      # Admin panel
-│
-├── database/
-│   ├── srms_database_schema.sql    # Database structure
-│   └── srms_database_population.sql # Initial data
-│
-├── pages/                      # Main site pages
-│   ├── home.php
-│   ├── about.php
-│   ├── admissions.php
-│   ├── academics.php
-│   ├── faculty.php
-│   ├── news.php
-│   └── contact.php
-│
+├── .htaccess                   # Apache configuration
+├── environment.php             # Environment detection & configuration
 └── index.php                   # Main entry point
 ```
+
+## Cross-Platform Compatibility
+
+This project is designed to work seamlessly across both Windows (WAMP) and Linux (XAMPP) environments:
+
+### Key Cross-Platform Features
+
+- **Environment Detection**: Automatically detects the operating system and configures settings appropriately
+- **Path Handling**: Uses platform-neutral path separators and normalizes file paths
+- **Database Configuration**: Adapts database connection parameters based on the environment
+- **File Permissions**: Applies appropriate permissions for each operating system
+- **Directory Structure**: Standardized directory structure works on both platforms
+
+### Windows-Specific Configuration
+
+- MySQL typically runs on port 3308 in WAMP
+- Backslash (`\`) is used as directory separator
+- Case-insensitive filesystem
+
+### Linux-Specific Configuration
+
+- MySQL typically runs on port 3306 in XAMPP
+- Forward slash (`/`) is used as directory separator
+- Case-sensitive filesystem (file handling is adapted accordingly)
+- Special attention to file permissions
 
 ## Content Management System
 
@@ -139,6 +187,29 @@ The website includes a content management system for authorized users with the f
 Login credentials for the initial admin account:
 - Username: admin
 - Password: password (should be changed immediately after first login)
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Errors**:
+   - Verify MySQL is running on the correct port
+   - Check database credentials in environment.php
+   - Ensure database exists and has been populated
+
+2. **File Permission Issues (Linux)**:
+   - Run `sudo chmod -R 755 /path/to/website` to set correct permissions
+   - For upload directories: `sudo chmod -R 777 /path/to/website/assets/images`
+
+3. **Image Upload Problems**:
+   - Check PHP upload_max_filesize and post_max_size in php.ini
+   - Verify directory permissions
+   - Use check-environment.php to diagnose issues
+
+4. **Cross-Platform Path Issues**:
+   - Use the provided file_exists_with_alternatives() function for file operations
+   - Always normalize paths with str_replace(['\\', '/'], DS, $path)
+   - Use forward slashes in HTML/CSS/JavaScript paths
 
 ## Maintenance and Updates
 
@@ -153,8 +224,9 @@ To update website content:
    - Access the Faculty management section
    - Add, edit or remove faculty members
 
-3. **Admission Information**:
-   - Update through the Admissions management section
+3. **Media Management**:
+   - Use the Media Library to upload and manage images
+   - Bulk upload is available for multiple files
 
 ## Backup Procedures
 
@@ -185,6 +257,7 @@ Potential enhancements for future versions:
 - Events calendar system
 - Gallery management
 - Document repository for school forms
+- Enhanced cross-platform compatibility for additional environments
 
 ## Credits
 
@@ -199,3 +272,4 @@ miguel.velasco.dev@gmail.com
 ---
 
 © 2025 St. Raphaela Mary School. All rights reserved.
+```

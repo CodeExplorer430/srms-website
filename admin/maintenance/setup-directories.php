@@ -1,6 +1,9 @@
 <?php
 session_start();
 
+// Include environment settings
+require_once __DIR__ . '/../environment.php';
+
 // Security check
 if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     echo "Unauthorized access";
@@ -23,15 +26,32 @@ $success = true;
 $results = [];
 
 foreach ($directories as $dir) {
+    // Normalize directory path for cross-platform compatibility
+    $dir = str_replace(['\\', '/'], DS, $dir);
     $full_path = $_SERVER['DOCUMENT_ROOT'] . $dir;
     
     if (!is_dir($full_path)) {
-        $created = mkdir($full_path, 0755, true);
+        // Use different permissions for Windows vs Linux
+        $permissions = IS_WINDOWS ? 0777 : 0755;
+        
+        $created = mkdir($full_path, $permissions, true);
         $results[] = [
             'path' => $dir,
             'status' => $created ? 'Created' : 'Failed',
             'error' => $created ? '' : error_get_last()['message']
         ];
+        
+        // Set additional permissions on Linux if needed
+        if ($created && !IS_WINDOWS) {
+            // Try to make the directory group-writable
+            @chmod($full_path, 0775);
+            
+            // Try to set the group to web server group if possible
+            if (function_exists('posix_getgrgid') && function_exists('posix_getgid')) {
+                $group = posix_getgrgid(posix_getgid())['name'] ?? 'www-data';
+                @chgrp($full_path, $group);
+            }
+        }
         
         if (!$created) {
             $success = false;
@@ -42,6 +62,11 @@ foreach ($directories as $dir) {
             'status' => 'Already exists',
             'error' => ''
         ];
+        
+        // On Linux, ensure existing directories have correct permissions
+        if (!IS_WINDOWS) {
+            @chmod($full_path, 0775);
+        }
     }
 }
 
@@ -55,6 +80,8 @@ $placeholder_images = [
 ];
 
 foreach ($placeholder_images as $path => $url) {
+    // Normalize path for cross-platform compatibility
+    $path = str_replace(['\\', '/'], DS, $path);
     $full_path = $_SERVER['DOCUMENT_ROOT'] . $path;
     
     if (!file_exists($full_path)) {
@@ -62,6 +89,12 @@ foreach ($placeholder_images as $path => $url) {
         
         if ($image_data) {
             $saved = file_put_contents($full_path, $image_data);
+            
+            // Set appropriate file permissions on Linux
+            if ($saved && !IS_WINDOWS) {
+                @chmod($full_path, 0664); // rw-rw-r--
+            }
+            
             $results[] = [
                 'path' => $path,
                 'status' => $saved ? 'Created' : 'Failed',

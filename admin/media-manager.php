@@ -33,9 +33,14 @@ $media_directories = [
 ];
 
 foreach ($media_directories as $key => $dir) {
-    $path = $_SERVER['DOCUMENT_ROOT'] . $dir;
+    // Normalize directory path for cross-platform compatibility
+    $dir_path = str_replace(['\\', '/'], DS, $dir);
+    $path = $_SERVER['DOCUMENT_ROOT'] . $dir_path;
+    
     if (is_dir($path)) {
-        $files = glob($path . "/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
+        // Use a platform-neutral pattern for globbing
+        $pattern = $path . DS . "*.{jpg,jpeg,png,gif}";
+        $files = glob($pattern, GLOB_BRACE);
         $count = count($files);
         $media_counts[$key] = $count;
         $media_counts['total'] += $count;
@@ -43,17 +48,17 @@ foreach ($media_directories as $key => $dir) {
 }
 
 // Handle file deletion if requested
-$delete_success = false;
-$delete_error = '';
-
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'])) {
     $file_path = urldecode($_GET['file']);
+    // Normalize file path for cross-platform compatibility
+    $file_path = str_replace(['\\', '/'], DS, $file_path);
     $full_path = $_SERVER['DOCUMENT_ROOT'] . $file_path;
     
     // Verify path is within allowed directories
     $is_allowed = false;
     foreach ($media_directories as $dir) {
-        if (strpos($file_path, $dir) === 0) {
+        $normalized_dir = str_replace(['\\', '/'], DS, $dir);
+        if (strpos($file_path, $normalized_dir) === 0) {
             $is_allowed = true;
             break;
         }
@@ -818,9 +823,15 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
             <?php
             // Generate media sections by category
             foreach ($media_directories as $category => $dir):
-                $path = $_SERVER['DOCUMENT_ROOT'] . $dir;
+                // Normalize directory path for cross-platform compatibility
+                $dir_path = str_replace(['\\', '/'], DS, $dir);
+                $path = $_SERVER['DOCUMENT_ROOT'] . $dir_path;
+                
                 if (is_dir($path)):
-                    $files = glob($path . "/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
+                    // Use a platform-neutral pattern for globbing
+                    $pattern = $path . DS . "*.{jpg,jpeg,png,gif}";
+                    $files = glob($pattern, GLOB_BRACE);
+                    
                     // Sort files by modification time (newest first)
                     usort($files, function($a, $b) {
                         return filemtime($b) - filemtime($a);

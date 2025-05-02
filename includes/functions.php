@@ -379,7 +379,7 @@ function file_exists_with_alternatives($image_path) {
 }
 
 /**
- * Normalize image paths for consistent handling
+ * Normalize image path for cross-platform compatibility
  */
 function normalize_image_path($path) {
     if (empty($path)) return '';
@@ -390,50 +390,73 @@ function normalize_image_path($path) {
     // Ensure path starts with slash
     $path = '/' . ltrim($path, '/');
     
-    // Convert legacy paths to new structure
-    if (strpos($path, '/images/School_Events') !== false) {
-        $basename = basename($path);
-        $event_number = preg_replace('/[^0-9]/', '', $basename);
-        $ext = pathinfo($basename, PATHINFO_EXTENSION);
-        $path = '/assets/images/events/event-' . $event_number . '.' . $ext;
-    } else if (strpos($path, '/images/School_Announcement') !== false) {
-        $basename = basename($path);
-        $announcement_number = preg_replace('/[^0-9]/', '', $basename);
-        $ext = pathinfo($basename, PATHINFO_EXTENSION);
-        $path = '/assets/images/news/announcement-' . $announcement_number . '.' . $ext;
-    }
+    // Convert backslashes to forward slashes (for Windows paths)
+    $path = str_replace('\\', '/', $path);
     
     // Clean up double slashes
     return preg_replace('#/+#', '/', $path);
 }
 
 /**
- * Enhanced file existence check with detailed logging
+ * Enhanced file existence check for cross-platform compatibility
  */
 function verify_image_exists($image_path) {
     if (empty($image_path)) return false;
     
     $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $image_path = normalize_image_path($image_path);
+    
+    // Try multiple path variations
     $paths_to_check = [
         $server_root . $image_path,
-        $server_root . DIRECTORY_SEPARATOR . ltrim($image_path, '/'),
-        // Try without 'assets' folder (legacy structure)
-        $server_root . str_replace('/assets/', '/', $image_path),
-        // Try with 'assets' folder (new structure)
-        $server_root . str_replace('/images/', '/assets/images/', $image_path)
+        $server_root . DS . ltrim($image_path, '/'),
+        rtrim($server_root, '/\\') . $image_path,
+        // For case-sensitive filesystems (Linux)
+        dirname($server_root . $image_path) . DS . basename($image_path)
     ];
     
     foreach ($paths_to_check as $path) {
         if (file_exists($path)) {
-            return $path; // Return the actual path that exists
+            return $path; // Return the first working path
         }
     }
     
-    // Log the issue
+    // If we get here, the file doesn't exist in any of the tried paths
     error_log("Image not found: {$image_path}. Tried paths: " . implode(', ', $paths_to_check));
     return false;
 }
 
+/**
+ * Cross-platform directory creation function
+ */
+function create_directory($dir, $recursive = true) {
+    // Normalize directory path
+    $dir = str_replace(['\\', '/'], DS, $dir);
+    
+    if (!file_exists($dir)) {
+        // Different permissions for Windows vs Linux
+        $permissions = IS_WINDOWS ? 0777 : 0755;
+        
+        if (!mkdir($dir, $permissions, $recursive)) {
+            error_log("Failed to create directory: {$dir}");
+            return false;
+        }
+        
+        // On Linux, we might need to set group permissions separately
+        if (!IS_WINDOWS) {
+            // Get the default Apache group
+            $group = posix_getgrgid(posix_getgid())['name'] ?? 'www-data';
+            
+            // Try to set group permissions (don't fail if this doesn't work)
+            @chgrp($dir, $group);
+            @chmod($dir, 0775); // rwxrwxr-x
+        }
+        
+        return true;
+    }
+    
+    return true; // Directory already exists
+}
 
 /**
  * Upload image to specified category directory
@@ -459,26 +482,38 @@ function upload_image($file, $category = 'news') {
         return false;
     }
     
-    // Create target directory if it doesn't exist
+    // Normalize target directory path
     $target_dir = $_SERVER['DOCUMENT_ROOT'] . '/assets/images/' . $category . '/';
+    $target_dir = str_replace(['\\', '/'], DS, $target_dir);
+    
+    // Create target directory if it doesn't exist
     if (!is_dir($target_dir)) {
-        if (!mkdir($target_dir, 0755, true)) {
-            error_log("Failed to create directory: {$target_dir}");
+        // Use our cross-platform directory creation function
+        if (!create_directory($target_dir)) {
             return false;
         }
     }
     
     // Generate unique filename
     $filename = pathinfo($file['name'], PATHINFO_FILENAME);
-    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    // Remove special characters and ensure Linux-friendly filename
+    $filename = preg_replace('/[^a-zA-Z0-9_-]/', '', $filename);
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     $unique_name = $filename . '-' . time() . '.' . $extension;
     
     // Set target path
     $target_path = $target_dir . $unique_name;
+    // Always use forward slashes for web paths
     $relative_path = '/assets/images/' . $category . '/' . $unique_name;
+    $relative_path = str_replace('\\', '/', $relative_path);
     
     // Upload file
     if (move_uploaded_file($file['tmp_name'], $target_path)) {
+        // Fix permissions on Linux
+        if (!IS_WINDOWS) {
+            chmod($target_path, 0644); // rw-r--r--
+        }
+        
         error_log("File uploaded successfully to {$target_path}");
         return $relative_path;
     } else {

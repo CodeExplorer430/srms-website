@@ -8,6 +8,9 @@ ini_set('display_errors', 0);
 
 session_start();
 
+// Include environment settings
+require_once '../../environment.php';
+
 // Security check
 if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     ob_end_clean(); // Clear any output
@@ -64,14 +67,17 @@ try {
             continue;
         }
         
-        // Upload the image
+        // Upload the image using the cross-platform enabled upload_image function
         $upload_result = upload_image($temp_file, $category);
         
         if($upload_result) {
+            // Ensure the path uses forward slashes for web URLs
+            $web_path = str_replace('\\', '/', $upload_result);
+            
             $results[] = [
                 'filename' => $temp_file['name'],
                 'success' => true,
-                'path' => $upload_result
+                'path' => $web_path
             ];
             $success_count++;
         } else {
