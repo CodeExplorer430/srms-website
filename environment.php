@@ -31,9 +31,8 @@ if (IS_WINDOWS) {
 }
 
 // Common configurations
-define('SITE_URL', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$_SERVER['HTTP_HOST']}");
+define('SITE_URL', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$_SERVER['HTTP_HOST']}/srms-website");
 define('ADMIN_EMAIL', 'admin@srms.edu.ph');
-
 // Set proper timezone
 date_default_timezone_set('Asia/Manila');
 ?>
