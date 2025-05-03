@@ -17,19 +17,43 @@ $debug_info[] = "Document Root: " . $_SERVER['DOCUMENT_ROOT'];
 $debug_info[] = "Script Path: " . __DIR__;
 $debug_info[] = "Server Software: " . $_SERVER['SERVER_SOFTWARE'];
 
-// Enhanced path resolution for XAMPP on Linux
-function get_proper_path($relative_path) {
-    // For XAMPP on Linux, ensure we have the correct base path
-    if (!IS_WINDOWS && strpos($_SERVER['SERVER_SOFTWARE'], 'XAMPP') !== false) {
-        // If the document root doesn't already include /opt/lampp/htdocs
-        if (strpos($_SERVER['DOCUMENT_ROOT'], '/opt/lampp/htdocs') === false) {
-            // Hard-code the path for XAMPP on Linux
-            return '/opt/lampp/htdocs/srms-website' . $relative_path;
-        }
+// IMPORTANT FIX: Explicitly set project folder name
+$project_folder = 'srms-website';
+
+// Get the correct base path that includes the project folder
+function get_base_path() {
+    global $project_folder;
+    
+    // Get the document root
+    $doc_root = $_SERVER['DOCUMENT_ROOT'];
+    
+    // Check if the document root already includes the project folder
+    if (strpos($doc_root, $project_folder) !== false) {
+        return $doc_root;
     }
     
-    // Default behavior
-    return $_SERVER['DOCUMENT_ROOT'] . $relative_path;
+    // If not, append the project folder to the document root
+    if (IS_WINDOWS) {
+        // Windows path
+        return rtrim($doc_root, '/\\') . '\\' . $project_folder;
+    } else {
+        // Linux path
+        return rtrim($doc_root, '/\\') . '/' . $project_folder;
+    }
+}
+
+// Resolve a relative path to the full path including project folder
+function get_proper_path($relative_path) {
+    $base_path = get_base_path();
+    
+    // Normalize path separators for the current OS
+    if (IS_WINDOWS) {
+        $relative_path = str_replace('/', '\\', $relative_path);
+        return $base_path . $relative_path;
+    } else {
+        $relative_path = str_replace('\\', '/', $relative_path);
+        return $base_path . $relative_path;
+    }
 }
 
 // Required directories
@@ -43,54 +67,52 @@ $directories = [
     '/assets/uploads/temp'
 ];
 
+// Add base path to debug info
+$debug_info[] = "Base Project Path: " . get_base_path();
+
 // Create directories
 $success = true;
 $results = [];
 
 foreach ($directories as $dir) {
-    // Normalize directory path for cross-platform compatibility
-    $dir = str_replace(['\\', '/'], DS, $dir);
+    // Get the full path using our improved path resolution
     $full_path = get_proper_path($dir);
     
     $results[] = [
         'path' => $dir,
-        'full_path' => $full_path, // Add this for debugging
+        'full_path' => $full_path,
     ];
     
     if (!is_dir($full_path)) {
-        // On Linux XAMPP, we need more permissive permissions
-        $permissions = IS_WINDOWS ? 0777 : 0777; // Always use 0777 for XAMPP on Linux
+        // Use appropriate permissions based on OS
+        $permissions = IS_WINDOWS ? 0777 : 0777;
         
         // Create the directory with full permissions
         $created = @mkdir($full_path, $permissions, true);
         
-        if (!$created) {
-            // Try using system commands for better error handling
-            if (!IS_WINDOWS) {
-                // Execute the mkdir command with sudo if available
-                $cmd = "mkdir -p " . escapeshellarg($full_path);
-                $output = [];
-                exec($cmd . " 2>&1", $output, $return_var);
-                
-                if ($return_var === 0) {
-                    $created = true;
-                    // Set permissions after creation
-                    exec("chmod -R 777 " . escapeshellarg($full_path));
-                } else {
-                    $error_msg = implode("\n", $output);
-                }
+        // For Linux, try system commands if PHP's mkdir fails
+        if (!$created && !IS_WINDOWS) {
+            $cmd = "mkdir -p " . escapeshellarg($full_path);
+            $output = [];
+            @exec($cmd . " 2>&1", $output, $return_var);
+            
+            if ($return_var === 0) {
+                $created = true;
+                // Set permissions after creation
+                @exec("chmod -R 777 " . escapeshellarg($full_path));
+            } else {
+                $error_msg = implode("\n", $output);
             }
         }
         
         $status = $created ? 'Created' : 'Failed';
-        $error = $created ? '' : (isset($error_msg) ? $error_msg : error_get_last()['message'] ?? 'Unknown error');
+        $error = $created ? '' : (isset($error_msg) ? $error_msg : (error_get_last() ? error_get_last()['message'] : 'Unknown error'));
         
         $results[count($results) - 1]['status'] = $status;
         $results[count($results) - 1]['error'] = $error;
         
-        // Set additional permissions on Linux if needed
+        // Set permissions on Linux
         if ($created && !IS_WINDOWS) {
-            // Make sure the directory is world-writable
             @chmod($full_path, 0777);
         }
         
@@ -101,7 +123,7 @@ foreach ($directories as $dir) {
         $results[count($results) - 1]['status'] = 'Already exists';
         $results[count($results) - 1]['error'] = '';
         
-        // On Linux, ensure existing directories have correct permissions
+        // Update permissions on Linux
         if (!IS_WINDOWS) {
             @chmod($full_path, 0777);
         }
@@ -118,8 +140,6 @@ $placeholder_images = [
 ];
 
 foreach ($placeholder_images as $path => $url) {
-    // Normalize path for cross-platform compatibility
-    $path = str_replace(['\\', '/'], DS, $path);
     $full_path = get_proper_path($path);
     
     if (!file_exists($full_path)) {
@@ -139,14 +159,14 @@ foreach ($placeholder_images as $path => $url) {
             
             // Set appropriate file permissions on Linux
             if ($saved && !IS_WINDOWS) {
-                @chmod($full_path, 0666); // rw-rw-rw-
+                @chmod($full_path, 0666);
             }
             
             $results[] = [
                 'path' => $path,
                 'full_path' => $full_path,
                 'status' => $saved ? 'Created' : 'Failed',
-                'error' => $saved ? '' : error_get_last()['message'] ?? 'Unknown error'
+                'error' => $saved ? '' : (error_get_last() ? error_get_last()['message'] : 'Unknown error')
             ];
             
             if (!$saved) {
@@ -157,7 +177,7 @@ foreach ($placeholder_images as $path => $url) {
                 'path' => $path,
                 'full_path' => $full_path,
                 'status' => 'Failed to download',
-                'error' => error_get_last()['message'] ?? 'Unknown error'
+                'error' => error_get_last() ? error_get_last()['message'] : 'Unknown error'
             ];
             $success = false;
         }
@@ -230,6 +250,20 @@ foreach ($placeholder_images as $path => $url) {
             border-radius: 5px;
             margin-bottom: 20px;
         }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .code-block {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            border-left: 4px solid #0a3060;
+        }
     </style>
 </head>
 <body>
@@ -272,17 +306,33 @@ foreach ($placeholder_images as $path => $url) {
     </table>
     
     <h2>Manual Fix Instructions</h2>
-    <p>If you're still experiencing issues, try running these commands manually from the terminal:</p>
-    <pre style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/news
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/events
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/promotional
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/facilities
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/campus
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/people
-        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/uploads/temp
-        sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets
-    </pre>
+    <div class="code-block">
+        <h3>Windows (XAMPP) Commands:</h3>
+        <pre>
+mkdir C:\xampp\htdocs\srms-website\assets\images\news
+mkdir C:\xampp\htdocs\srms-website\assets\images\events
+mkdir C:\xampp\htdocs\srms-website\assets\images\promotional
+mkdir C:\xampp\htdocs\srms-website\assets\images\facilities
+mkdir C:\xampp\htdocs\srms-website\assets\images\campus
+mkdir C:\xampp\htdocs\srms-website\assets\images\people
+mkdir C:\xampp\htdocs\srms-website\assets\uploads\temp
+</pre>
+    </div>
+
+    <div class="code-block">
+        <h3>Linux (XAMPP) Commands:</h3>
+        <pre>
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/news
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/events
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/promotional
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/facilities
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/campus
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/people
+sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/uploads/temp
+sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets
+sudo chown -R daemon:daemon /opt/lampp/htdocs/srms-website/assets
+</pre>
+    </div>
     
     <p><a href="../index.php">Back to Dashboard</a></p>
 </body>
