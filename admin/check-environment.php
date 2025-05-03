@@ -176,6 +176,14 @@ $php_config = [
             <td>Document Root</td>
             <td><?php echo $_SERVER['DOCUMENT_ROOT']; ?></td>
         </tr>
+        <tr>
+            <td>Server Type</td>
+                <td><?php echo SERVER_TYPE; ?> (Auto-detected)</td>
+            </tr>
+        <tr>
+            <td>Server Software</td>
+            <td><?php echo SERVER_SOFTWARE; ?></td>
+        </tr>
     </table>
     
     <h2>Directory Permissions</h2>

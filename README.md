@@ -11,7 +11,7 @@ This project is a custom-developed website for St. Raphaela Mary School, offerin
 - **Responsive Design**: Fully responsive layout that works seamlessly across desktops, tablets, and mobile devices
 - **Dynamic Content Management**: Backend system for managing site content
 - **User Authentication**: Secure login system with role-based access control
-- **Cross-Platform Compatibility**: Works seamlessly across Windows and Linux environments
+- **Cross-Platform Compatibility**: Works seamlessly across Windows and Linux environments with automatic server detection
 - **School Information Pages**: Dedicated sections for:
   - About the school (mission, vision, philosophy)
   - Academic programs (Preschool to Senior High School)
@@ -70,40 +70,92 @@ This project is a custom-developed website for St. Raphaela Mary School, offerin
 
    ```php
    <?php
-   // Detect operating system and set environment-specific configurations
+   // Enhanced environment detection and configuration
+   
+   // Detect operating system
    define('IS_WINDOWS', strtoupper(substr(PHP_OS, 0, 3)) === 'WIN');
    
    // Define OS-specific constants
-   define('DS', DIRECTORY_SEPARATOR);
+   define('DS', DIRECTORY_SEPARATOR); // Will be \ on Windows, / on Linux
+   
+   // Detect server software (XAMPP vs WAMP vs LAMP)
+   function detect_server_type() {
+       // Default to XAMPP
+       $server_type = 'XAMPP';
+       
+       if (IS_WINDOWS) {
+           // Check for WAMP-specific paths
+           if (file_exists('C:/wamp/www') || file_exists('C:/wamp64/www') || 
+               strpos($_SERVER['DOCUMENT_ROOT'], 'wamp') !== false) {
+               $server_type = 'WAMP';
+           }
+       } else {
+           // On Linux, check for LAMP-specific configuration
+           if (file_exists('/etc/apache2/sites-available') && !file_exists('/opt/lampp')) {
+               $server_type = 'LAMP';
+           }
+       }
+       
+       return $server_type;
+   }
+   
+   // Get server type
+   $server_type = detect_server_type();
+   define('SERVER_TYPE', $server_type);
    
    // Set environment-specific database configurations
    if (IS_WINDOWS) {
-       // Windows (WAMP) configuration
-       define('DB_SERVER', 'localhost');
-       define('DB_USERNAME', 'root');
-       define('DB_PORT', '3308'); // Your WAMP MySQL port
-       define('DB_PASSWORD', '');
-       define('DB_NAME', 'srms_database');
+       if ($server_type === 'WAMP') {
+           // Windows (WAMP) configuration
+           define('DB_SERVER', 'localhost');
+           define('DB_USERNAME', 'root');
+           define('DB_PORT', '3308'); // Common WAMP MySQL port
+           define('DB_PASSWORD', '');
+           define('DB_NAME', 'srms_database');
+       } else {
+           // Windows (XAMPP) configuration
+           define('DB_SERVER', 'localhost');
+           define('DB_USERNAME', 'root');
+           define('DB_PORT', '3306'); // Default XAMPP MySQL port
+           define('DB_PASSWORD', '');
+           define('DB_NAME', 'srms_database');
+       }
    } else {
-       // Linux (XAMPP) configuration
-       define('DB_SERVER', 'localhost');
-       define('DB_USERNAME', 'root');
-       define('DB_PORT', '3306'); // Default MySQL port on Linux XAMPP
-       define('DB_PASSWORD', '');
-       define('DB_NAME', 'srms_database');
+       if ($server_type === 'LAMP') {
+           // Linux (Traditional LAMP) configuration
+           define('DB_SERVER', 'localhost');
+           define('DB_USERNAME', 'root');
+           define('DB_PORT', '3306');
+           define('DB_PASSWORD', '');
+           define('DB_NAME', 'srms_database');
+       } else {
+           // Linux (XAMPP) configuration
+           define('DB_SERVER', 'localhost');
+           define('DB_USERNAME', 'root');
+           define('DB_PORT', '3306');
+           define('DB_PASSWORD', '');
+           define('DB_NAME', 'srms_database');
+       }
    }
+   
+   // Common configurations
+   define('SITE_URL', (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http") . "://{$_SERVER['HTTP_HOST']}/srms-website");
+   define('ADMIN_EMAIL', 'admin@srms.edu.ph');
+   
+   // Set proper timezone
+   date_default_timezone_set('Asia/Manila');
    ?>
    ```
 
 4. **Set Proper Permissions**:
-   - For Windows (WAMP):
+   - For Windows (WAMP/XAMPP):
      - No special permissions required
    
-   - For Linux (XAMPP):
+   - For Linux (XAMPP/LAMP):
      ```bash
-     sudo chmod -R 755 /opt/lampp/htdocs/srms-website
-     sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets/images
-     sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets/uploads
+     sudo chmod -R 755 /path/to/srms-website
+     sudo chmod -R 777 /path/to/srms-website/assets/images
+     sudo chmod -R 777 /path/to/srms-website/assets/uploads
      ```
 
 5. **Run Environment Check**:
@@ -153,28 +205,30 @@ srms-website/
 
 ## Cross-Platform Compatibility
 
-This project is designed to work seamlessly across both Windows (WAMP) and Linux (XAMPP) environments:
+This project is designed to work seamlessly across multiple server environments:
 
 ### Key Cross-Platform Features
 
-- **Environment Detection**: Automatically detects the operating system and configures settings appropriately
+- **Auto Server Detection**: Automatically detects the server type (WAMP, XAMPP, LAMP) and configures settings appropriately
 - **Path Handling**: Uses platform-neutral path separators and normalizes file paths
-- **Database Configuration**: Adapts database connection parameters based on the environment
+- **Database Configuration**: Adapts database connection parameters based on the detected environment
 - **File Permissions**: Applies appropriate permissions for each operating system
-- **Directory Structure**: Standardized directory structure works on both platforms
+- **Directory Structure**: Standardized directory structure works on all platforms
 
-### Windows-Specific Configuration
+### Windows Environment Support
 
-- MySQL typically runs on port 3308 in WAMP
-- Backslash (`\`) is used as directory separator
-- Case-insensitive filesystem
+- **WAMP**: Full support with MySQL typically on port 3308
+- **XAMPP**: Full support with MySQL typically on port 3306
+- Backslash (`\`) handled for directory separators
+- Accommodates case-insensitive filesystem
 
-### Linux-Specific Configuration
+### Linux Environment Support
 
-- MySQL typically runs on port 3306 in XAMPP
-- Forward slash (`/`) is used as directory separator
-- Case-sensitive filesystem (file handling is adapted accordingly)
-- Special attention to file permissions
+- **LAMP**: Full support for traditional LAMP setup
+- **XAMPP**: Full support for Linux XAMPP installation
+- Forward slash (`/`) used for directory separators
+- Handles case-sensitive filesystem requirements
+- Proper file permission management
 
 ## Content Management System
 
@@ -193,7 +247,7 @@ Login credentials for the initial admin account:
 ### Common Issues
 
 1. **Database Connection Errors**:
-   - Verify MySQL is running on the correct port
+   - Verify MySQL is running on the correct port (3308 for WAMP, 3306 for XAMPP/LAMP)
    - Check database credentials in environment.php
    - Ensure database exists and has been populated
 
@@ -272,4 +326,3 @@ miguel.velasco.dev@gmail.com
 ---
 
 © 2025 St. Raphaela Mary School. All rights reserved.
-```
