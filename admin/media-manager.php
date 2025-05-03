@@ -36,6 +36,24 @@ $media_directories = [
     'campus' => '/assets/images/campus'
 ];
 
+// Helper function to get category icon
+function get_category_icon($category) {
+    switch ($category) {
+        case 'news':
+            return 'bxs-news';
+        case 'events':
+            return 'bx-calendar-event';
+        case 'promotional':
+            return 'bx-bullhorn';
+        case 'facilities':
+            return 'bx-building-house';
+        case 'campus':
+            return 'bx-landscape';
+        default:
+            return 'bx-image';
+    }
+}
+
 foreach ($media_directories as $key => $dir) {
     // Normalize directory path for cross-platform compatibility
     $dir_path = str_replace(['\\', '/'], DS, $dir);
@@ -648,6 +666,129 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
             background-color: rgba(255, 255, 255, 0.3);
         }
         
+        /* Category Filter Tabs */
+        .category-filter-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .category-tab {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            color: #495057;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+        
+        .category-tab i {
+            margin-right: 8px;
+            font-size: 18px;
+        }
+        
+        .category-tab .count {
+            margin-left: 5px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .category-tab:hover {
+            background-color: #e9ecef;
+        }
+        
+        .category-tab.active {
+            background-color: #0a3060;
+            color: white;
+            border-color: #0a3060;
+        }
+        
+        .category-tab.active .count {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        /* Bulk Actions */
+        .bulk-actions-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .selected-count {
+            font-weight: 500;
+            color: #0a3060;
+        }
+        
+        .bulk-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .bulk-action-btn {
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            border: none;
+            background-color: #e9ecef;
+            color: #495057;
+            transition: all 0.2s;
+        }
+        
+        .bulk-action-btn i {
+            margin-right: 8px;
+        }
+        
+        .bulk-action-btn:hover {
+            background-color: #dee2e6;
+        }
+        
+        .bulk-action-btn.danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        
+        .bulk-action-btn.danger:hover {
+            background-color: #c82333;
+        }
+        
+        /* Media Item Selection */
+        .media-select {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 5;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .media-item:hover .media-select,
+        .media-item.selected .media-select {
+            opacity: 1;
+        }
+        
+        .media-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .media-item.selected {
+            border: 2px solid #3C91E6;
+        }
+        
         /* Responsive Adjustments */
         @media (max-width: 768px) {
             .media-stats {
@@ -673,6 +814,29 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
             
             .action-button {
                 width: 100%;
+            }
+            
+            .category-filter-tabs {
+                flex-direction: column;
+            }
+            
+            .category-tab {
+                width: 100%;
+            }
+            
+            .bulk-actions-bar {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .bulk-actions {
+                width: 100%;
+                flex-direction: column;
+            }
+            
+            .bulk-action-btn {
+                width: 100%;
+                justify-content: center;
             }
         }
     </style>
@@ -824,6 +988,35 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
                 </button>
             </div>
             
+            <!-- Category Filter Tabs -->
+            <div class="category-filter-tabs">
+                <button type="button" class="category-tab active" data-category="all">
+                    <i class='bx bx-images'></i> All Media <span class="count">(<?php echo $media_counts['total']; ?>)</span>
+                </button>
+                <?php foreach ($media_directories as $category => $dir): ?>
+                <button type="button" class="category-tab" data-category="<?php echo $category; ?>">
+                    <i class='bx <?php echo get_category_icon($category); ?>'></i>
+                    <?php echo ucfirst($category); ?> <span class="count">(<?php echo $media_counts[$category]; ?>)</span>
+                </button>
+                <?php endforeach; ?>
+            </div>
+            
+            <!-- Bulk Actions Bar -->
+            <div class="bulk-actions-bar" style="display: none;">
+                <div class="selected-count">0 items selected</div>
+                <div class="bulk-actions">
+                    <button type="button" class="bulk-action-btn select-all">
+                        <i class='bx bx-select-multiple'></i> Select All
+                    </button>
+                    <button type="button" class="bulk-action-btn deselect-all">
+                        <i class='bx bx-list-check'></i> Deselect All
+                    </button>
+                    <button type="button" class="bulk-action-btn delete-selected danger">
+                        <i class='bx bx-trash'></i> Delete Selected
+                    </button>
+                </div>
+            </div>
+            
             <?php
             // Generate media sections by category
             foreach ($media_directories as $category => $dir):
@@ -842,26 +1035,9 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
                     });
                     
                     // Get category icon
-                    $icon_class = 'bx-image';
-                    switch ($category) {
-                        case 'news':
-                            $icon_class = 'bxs-news';
-                            break;
-                        case 'events':
-                            $icon_class = 'bx-calendar-event';
-                            break;
-                        case 'promotional':
-                            $icon_class = 'bx-bullhorn';
-                            break;
-                        case 'facilities':
-                            $icon_class = 'bx-building-house';
-                            break;
-                        case 'campus':
-                            $icon_class = 'bx-landscape';
-                            break;
-                    }
+                    $icon_class = get_category_icon($category);
             ?>
-            <div class="category-section">
+            <div class="category-section" data-category="<?php echo $category; ?>">
                 <div class="category-header">
                     <h3 class="category-title">
                         <i class='bx <?php echo $icon_class; ?>'></i> <?php echo ucfirst($category); ?> Images
@@ -885,7 +1061,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
                             $file_name = basename($file);
                             $file_time = filemtime($file);
                         ?>
-                        <div class="media-item">
+                        <div class="media-item" data-category="<?php echo $category; ?>">
+                            <div class="media-select">
+                                <input type="checkbox" class="media-checkbox" data-path="<?php echo htmlspecialchars($file_path); ?>">
+                            </div>
                             <div class="media-thumbnail">
                                 <img src="<?php echo $file_path; ?>" alt="<?php echo htmlspecialchars($file_name); ?>">
                                 <div class="media-actions">
@@ -987,12 +1166,81 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
         </div>
     </div>
     
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-confirm-modal" class="media-library-modal">
+        <div class="media-library-content" style="max-width: 500px; height: auto;">
+            <div class="media-library-header">
+                <h2><i class='bx bx-trash'></i> Confirm Deletion</h2>
+                <span class="media-library-close" id="close-delete-modal">&times;</span>
+            </div>
+            <div class="section-body" style="padding: 20px;">
+                <p>Are you sure you want to delete <span id="delete-count">0</span> selected files?</p>
+                <p class="text-danger"><strong>Warning:</strong> This action cannot be undone.</p>
+                <div style="text-align: right; margin-top: 20px;">
+                    <button type="button" class="cancel-btn" id="cancel-delete" style="background-color: #f8f9fa; border: 1px solid #ddd; color: #495057; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Cancel</button>
+                    <button type="button" class="delete-btn danger" id="confirm-delete" style="background-color: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Delete Files</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Media Library Modal -->
     <?php include_once 'includes/media-library.php'; ?>
     <?php render_media_library('dummy-field'); ?>
     <input type="hidden" id="dummy-field" name="dummy-field" value="">
 
+    <!-- Bulk Upload Modal -->
+    <div id="bulk-upload-modal" class="media-library-modal">
+        <div class="media-library-content" style="max-width: 700px; height: auto;">
+            <div class="media-library-header">
+                <h2><i class='bx bx-upload'></i> Bulk Upload Media</h2>
+                <span class="media-library-close" id="close-bulk-upload-modal">&times;</span>
+            </div>
+            <div class="section-body" style="padding: 20px;">
+                <form id="bulk-upload-form" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="bulk-upload-files">Select Multiple Image Files</label>
+                        <input type="file" id="bulk-upload-files" name="bulk_files[]" accept="image/jpeg, image/png, image/gif" multiple required>
+                        <small style="color: #6c757d;">Accepted formats: JPG, PNG, GIF. Max size per file: 2MB</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="bulk-upload-category">Target Category</label>
+                        <select id="bulk-upload-category" name="bulk_category" required>
+                            <option value="news">News</option>
+                            <option value="events">Events</option>
+                            <option value="promotional">Promotional</option>
+                            <option value="facilities">Facilities</option>
+                            <option value="campus">Campus</option>
+                        </select>
+                    </div>
+                    
+                    <div class="bulk-preview" style="margin: 20px 0; display: none;">
+                        <h4>Files to Upload (<span id="file-count">0</span>)</h4>
+                        <div class="file-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px;">
+                            <!-- File preview items will be added here dynamically -->
+                        </div>
+                    </div>
+                    
+                    <div id="upload-progress" style="display: none; margin-bottom: 20px;">
+                        <h4>Upload Progress</h4>
+                        <div class="progress" style="height: 20px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+                            <div class="progress-bar" style="height: 100%; background-color: #3C91E6; width: 0%; transition: width 0.3s; color: white; text-align: center; line-height: 20px;"></div>
+                        </div>
+                        <div class="progress-text" style="margin-top: 5px; text-align: center; font-size: 12px;">0%</div>
+                    </div>
+                    
+                    <div style="text-align: right;">
+                        <button type="button" class="cancel-btn" id="cancel-bulk-upload" style="background-color: #f8f9fa; border: 1px solid #ddd; color: #495057; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Cancel</button>
+                        <button type="submit" class="save-btn" style="background-color: #3C91E6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Upload Files</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="../assets/js/media-library.js"></script>
+    <script src="../assets/js/media-modal.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Upload Modal Functionality
@@ -1155,6 +1403,383 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
                     document.body.style.overflow = 'hidden';
                 });
             }
+            
+            // Bulk Upload Modal Functionality
+            const bulkUploadModal = document.getElementById('bulk-upload-modal');
+            const bulkUploadBtn = document.getElementById('bulk-upload-btn');
+            const closeBulkUploadModal = document.getElementById('close-bulk-upload-modal');
+            const cancelBulkUpload = document.getElementById('cancel-bulk-upload');
+            const bulkUploadForm = document.getElementById('bulk-upload-form');
+            const bulkUploadFiles = document.getElementById('bulk-upload-files');
+            const bulkUploadCategory = document.getElementById('bulk-upload-category');
+            const bulkPreview = document.querySelector('.bulk-preview');
+            const fileList = document.querySelector('.file-list');
+            const fileCount = document.getElementById('file-count');
+            const uploadProgress = document.getElementById('upload-progress');
+            const progressBar = document.querySelector('.progress-bar');
+            const progressText = document.querySelector('.progress-text');
+            
+            // Open Bulk Upload Modal
+            if (bulkUploadBtn) {
+                bulkUploadBtn.addEventListener('click', function() {
+                    bulkUploadModal.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                });
+            }
+            
+            // Close Bulk Upload Modal
+            function closeBulkUploadModalFn() {
+                bulkUploadModal.style.display = 'none';
+                document.body.style.overflow = '';
+                bulkUploadForm.reset();
+                bulkPreview.style.display = 'none';
+                fileList.innerHTML = '';
+                fileCount.textContent = '0';
+                uploadProgress.style.display = 'none';
+                progressBar.style.width = '0%';
+                progressText.textContent = '0%';
+            }
+            
+            if (closeBulkUploadModal) {
+                closeBulkUploadModal.addEventListener('click', closeBulkUploadModalFn);
+            }
+            
+            if (cancelBulkUpload) {
+                cancelBulkUpload.addEventListener('click', closeBulkUploadModalFn);
+            }
+            
+            if (bulkUploadModal) {
+                bulkUploadModal.addEventListener('click', function(e) {
+                    if (e.target === bulkUploadModal) {
+                        closeBulkUploadModalFn();
+                    }
+                });
+            }
+            
+            // Preview selected files
+            if (bulkUploadFiles) {
+                bulkUploadFiles.addEventListener('change', function() {
+                    if (this.files && this.files.length > 0) {
+                        bulkPreview.style.display = 'block';
+                        fileList.innerHTML = '';
+                        fileCount.textContent = this.files.length;
+                        
+                        // Display preview for each file
+                        for (let i = 0; i < this.files.length; i++) {
+                            const file = this.files[i];
+                            const reader = new FileReader();
+                            
+                            reader.onload = function(e) {
+                                const fileItem = document.createElement('div');
+                                fileItem.className = 'file-item';
+                                fileItem.style.display = 'flex';
+                                fileItem.style.alignItems = 'center';
+                                fileItem.style.marginBottom = '10px';
+                                fileItem.style.padding = '5px';
+                                fileItem.style.borderBottom = '1px solid #dee2e6';
+                                
+                                fileItem.innerHTML = `
+                                    <img src="${e.target.result}" alt="${file.name}" style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; border-radius: 4px;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 500; font-size: 14px;">${file.name}</div>
+                                        <div style="color: #6c757d; font-size: 12px;">${(file.size / 1024).toFixed(2)} KB</div>
+                                    </div>
+                                `;
+                                
+                                fileList.appendChild(fileItem);
+                            };
+                            
+                            reader.readAsDataURL(file);
+                        }
+                    } else {
+                        bulkPreview.style.display = 'none';
+                        fileList.innerHTML = '';
+                        fileCount.textContent = '0';
+                    }
+                });
+            }
+            
+            // Handle bulk upload form submission
+            if (bulkUploadForm) {
+                bulkUploadForm.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    
+                    if (!bulkUploadFiles.files || bulkUploadFiles.files.length === 0) {
+                        alert('Please select files to upload');
+                        return;
+                    }
+                    
+                    const formData = new FormData(this);
+                    const submitButton = this.querySelector('button[type="submit"]');
+                    const originalText = submitButton.textContent;
+                    
+                    // Show loading state
+                    submitButton.textContent = 'Uploading...';
+                    submitButton.disabled = true;
+                    uploadProgress.style.display = 'block';
+                    
+                    // Upload files with progress tracking
+                    const xhr = new XMLHttpRequest();
+                    
+                    xhr.open('POST', 'ajax/bulk-upload.php', true);
+                    
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percentComplete = Math.round((e.loaded / e.total) * 100);
+                            progressBar.style.width = percentComplete + '%';
+                            progressText.textContent = percentComplete + '%';
+                        }
+                    });
+                    
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                
+                                if (response.success) {
+                                    alert(response.message);
+                                    // Reload page to reflect changes
+                                    window.location.reload();
+                                } else {
+                                    alert('Upload failed: ' + response.message);
+                                    submitButton.textContent = originalText;
+                                    submitButton.disabled = false;
+                                }
+                            } catch (error) {
+                                console.error('Error parsing response:', error);
+                                alert('Error processing server response. Please try again.');
+                                submitButton.textContent = originalText;
+                                submitButton.disabled = false;
+                            }
+                        } else {
+                            alert('Upload failed with status: ' + xhr.status);
+                            submitButton.textContent = originalText;
+                            submitButton.disabled = false;
+                        }
+                    };
+                    
+                    xhr.onerror = function() {
+                        alert('Upload failed. Please check your connection and try again.');
+                        submitButton.textContent = originalText;
+                        submitButton.disabled = false;
+                    };
+                    
+                    xhr.send(formData);
+                });
+            }
+            
+            // Variables for bulk actions
+            const categoryTabs = document.querySelectorAll('.category-tab');
+            const categorySections = document.querySelectorAll('.category-section');
+            const bulkActionsBar = document.querySelector('.bulk-actions-bar');
+            const selectedCountDisplay = document.querySelector('.selected-count');
+            const selectAllBtn = document.querySelector('.bulk-action-btn.select-all');
+            const deselectAllBtn = document.querySelector('.bulk-action-btn.deselect-all');
+            const deleteSelectedBtn = document.querySelector('.bulk-action-btn.delete-selected');
+            const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+            const deleteCountDisplay = document.getElementById('delete-count');
+            const confirmDeleteBtn = document.getElementById('confirm-delete');
+            const cancelDeleteBtn = document.getElementById('cancel-delete');
+            const closeDeleteModalBtn = document.getElementById('close-delete-modal');
+            
+            // Initialize state
+            let selectedFiles = [];
+            
+            // Category Filter Tabs
+            categoryTabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // Update active state
+                    categoryTabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Get selected category
+                    const category = this.getAttribute('data-category');
+                    
+                    // Show/hide category sections
+                    if (category === 'all') {
+                        categorySections.forEach(section => {
+                            section.style.display = 'block';
+                        });
+                    } else {
+                        categorySections.forEach(section => {
+                            if (section.getAttribute('data-category') === category) {
+                                section.style.display = 'block';
+                            } else {
+                                section.style.display = 'none';
+                            }
+                        });
+                    }
+                    
+                    // Reset selection when changing categories
+                    resetSelection();
+                });
+            });
+            
+            // Media Item Selection
+            document.addEventListener('click', function(e) {
+                if (e.target.classList.contains('media-checkbox')) {
+                    const checkbox = e.target;
+                    const mediaItem = checkbox.closest('.media-item');
+                    
+                    if (checkbox.checked) {
+                        mediaItem.classList.add('selected');
+                        selectedFiles.push(checkbox.getAttribute('data-path'));
+                    } else {
+                        mediaItem.classList.remove('selected');
+                        const index = selectedFiles.indexOf(checkbox.getAttribute('data-path'));
+                        if (index > -1) {
+                            selectedFiles.splice(index, 1);
+                        }
+                    }
+                    
+                    updateBulkActionsBar();
+                }
+            });
+            
+            // Select All Button
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener('click', function() {
+                    const activeCategory = document.querySelector('.category-tab.active').getAttribute('data-category');
+                    
+                    document.querySelectorAll('.media-checkbox').forEach(checkbox => {
+                        const mediaItem = checkbox.closest('.media-item');
+                        
+                        // Only select visible items based on active category
+                        if (activeCategory === 'all' || mediaItem.getAttribute('data-category') === activeCategory) {
+                            checkbox.checked = true;
+                            mediaItem.classList.add('selected');
+                            
+                            const path = checkbox.getAttribute('data-path');
+                            if (!selectedFiles.includes(path)) {
+                                selectedFiles.push(path);
+                            }
+                        }
+                    });
+                    
+                    updateBulkActionsBar();
+                });
+            }
+            
+            // Deselect All Button
+            if (deselectAllBtn) {
+                deselectAllBtn.addEventListener('click', function() {
+                    resetSelection();
+                });
+            }
+            
+            // Delete Selected Button
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.addEventListener('click', function() {
+                    if (selectedFiles.length === 0) return;
+                    
+                    // Show confirmation modal
+                    deleteCountDisplay.textContent = selectedFiles.length;
+                    deleteConfirmModal.style.display = 'block';
+                    document.body.style.overflow = 'hidden';
+                });
+            }
+            
+            // Confirm Delete Button
+            if (confirmDeleteBtn) {
+                confirmDeleteBtn.addEventListener('click', function() {
+                    if (selectedFiles.length === 0) {
+                        closeDeleteModal();
+                        return;
+                    }
+                    
+                    // Disable button and show loading state
+                    confirmDeleteBtn.disabled = true;
+                    confirmDeleteBtn.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i> Deleting...';
+                    
+                    // Fix paths before sending using our utility function
+                    const fixedPaths = selectedFiles.map(path => normalizePath(path));
+                    
+                    console.log('Sending files for deletion:', fixedPaths);
+                    
+                    // Send AJAX request to delete files
+                    fetch('ajax/bulk-delete.php', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ files: fixedPaths })
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok: ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('Delete response:', data);
+                        
+                        if (data.success) {
+                            // Show success message with appropriate detail
+                            if (data.error_count > 0) {
+                                alert(data.message + '\n\nClick OK to refresh the page.');
+                            } else {
+                                alert('Successfully deleted ' + data.success_count + ' files.');
+                            }
+                            // Reload page to reflect changes
+                            window.location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                            closeDeleteModal();
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred during deletion: ' + error.message);
+                        closeDeleteModal();
+                        confirmDeleteBtn.disabled = false;
+                        confirmDeleteBtn.innerHTML = 'Delete Files';
+                    });
+                });
+            }
+            
+            // Cancel and Close Delete Modal Buttons
+            if (cancelDeleteBtn) {
+                cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+            }
+            
+            if (closeDeleteModalBtn) {
+                closeDeleteModalBtn.addEventListener('click', closeDeleteModal);
+            }
+            
+            // Close modal if clicking outside of content
+            if (deleteConfirmModal) {
+                deleteConfirmModal.addEventListener('click', function(e) {
+                    if (e.target === deleteConfirmModal) {
+                        closeDeleteModal();
+                    }
+                });
+            }
+            
+            // Helper Functions
+            function updateBulkActionsBar() {
+                if (selectedFiles.length > 0) {
+                    bulkActionsBar.style.display = 'flex';
+                    selectedCountDisplay.textContent = selectedFiles.length + ' items selected';
+                } else {
+                    bulkActionsBar.style.display = 'none';
+                }
+            }
+            
+            function resetSelection() {
+                selectedFiles = [];
+                document.querySelectorAll('.media-checkbox').forEach(checkbox => {
+                    checkbox.checked = false;
+                    checkbox.closest('.media-item').classList.remove('selected');
+                });
+                bulkActionsBar.style.display = 'none';
+            }
+            
+            function closeDeleteModal() {
+                deleteConfirmModal.style.display = 'none';
+                document.body.style.overflow = '';
+                confirmDeleteBtn.disabled = false;
+                confirmDeleteBtn.innerHTML = 'Delete Files';
+            }
         });
         
         // Function to upload to specific category
@@ -1194,230 +1819,22 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
         // Function to confirm and delete image
         function confirmDelete(path) {
             if (confirm('Are you sure you want to delete this image?')) {
-                window.location.href = 'media-manager.php?action=delete&file=' + encodeURIComponent(path);
+                window.location.href = 'media-manager.php?action=delete&file=' + encodeURIComponent(normalizePath(path));
             }
         }
+
+        // Path normalization utility function
+        function normalizePath(path) {
+            if (!path) return '';
+            // Replace all backslashes with forward slashes
+            let normalized = path.replace(/\\/g, '/');
+            // Remove any double slashes
+            normalized = normalized.replace(/\/+/g, '/');
+            // Ensure path starts with a single slash
+            normalized = '/' + normalized.replace(/^\/+/, '');
+            return normalized;
+        }
+
     </script>
-
-    <!-- Bulk Upload Modal -->
-<div id="bulk-upload-modal" class="media-library-modal">
-    <div class="media-library-content" style="max-width: 700px; height: auto;">
-        <div class="media-library-header">
-            <h2><i class='bx bx-upload'></i> Bulk Upload Media</h2>
-            <span class="media-library-close" id="close-bulk-upload-modal">&times;</span>
-        </div>
-        <div class="section-body" style="padding: 20px;">
-            <form id="bulk-upload-form" enctype="multipart/form-data">
-                <div class="form-group">
-                    <label for="bulk-upload-files">Select Multiple Image Files</label>
-                    <input type="file" id="bulk-upload-files" name="bulk_files[]" accept="image/jpeg, image/png, image/gif" multiple required>
-                    <small style="color: #6c757d;">Accepted formats: JPG, PNG, GIF. Max size per file: 2MB</small>
-                </div>
-                
-                <div class="form-group">
-                    <label for="bulk-upload-category">Target Category</label>
-                    <select id="bulk-upload-category" name="bulk_category" required>
-                        <option value="news">News</option>
-                        <option value="events">Events</option>
-                        <option value="promotional">Promotional</option>
-                        <option value="facilities">Facilities</option>
-                        <option value="campus">Campus</option>
-                    </select>
-                </div>
-                
-                <div class="bulk-preview" style="margin: 20px 0; display: none;">
-                    <h4>Files to Upload (<span id="file-count">0</span>)</h4>
-                    <div class="file-list" style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px;">
-                        <!-- File preview items will be added here dynamically -->
-                    </div>
-                </div>
-                
-                <div id="upload-progress" style="display: none; margin-bottom: 20px;">
-                    <h4>Upload Progress</h4>
-                    <div class="progress" style="height: 20px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
-                        <div class="progress-bar" style="height: 100%; background-color: #3C91E6; width: 0%; transition: width 0.3s; color: white; text-align: center; line-height: 20px;"></div>
-                    </div>
-                    <div class="progress-text" style="margin-top: 5px; text-align: center; font-size: 12px;">0%</div>
-                </div>
-                
-                <div style="text-align: right;">
-                    <button type="button" class="cancel-btn" id="cancel-bulk-upload" style="background-color: #f8f9fa; border: 1px solid #ddd; color: #495057; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-right: 10px;">Cancel</button>
-                    <button type="submit" class="save-btn" style="background-color: #3C91E6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Upload Files</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script src="../assets/js/media-library.js"></script>
-<script src="../assets/js/media-modal.js"></script>
-<script>
-// Add to existing script in media-manager.php
-document.addEventListener('DOMContentLoaded', function() {
-    // Bulk Upload Modal Functionality
-    const bulkUploadModal = document.getElementById('bulk-upload-modal');
-    const bulkUploadBtn = document.getElementById('bulk-upload-btn');
-    const closeBulkUploadModal = document.getElementById('close-bulk-upload-modal');
-    const cancelBulkUpload = document.getElementById('cancel-bulk-upload');
-    const bulkUploadForm = document.getElementById('bulk-upload-form');
-    const bulkUploadFiles = document.getElementById('bulk-upload-files');
-    const bulkUploadCategory = document.getElementById('bulk-upload-category');
-    const bulkPreview = document.querySelector('.bulk-preview');
-    const fileList = document.querySelector('.file-list');
-    const fileCount = document.getElementById('file-count');
-    const uploadProgress = document.getElementById('upload-progress');
-    const progressBar = document.querySelector('.progress-bar');
-    const progressText = document.querySelector('.progress-text');
-    
-    // Open Bulk Upload Modal
-    if (bulkUploadBtn) {
-        bulkUploadBtn.addEventListener('click', function() {
-            bulkUploadModal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-        });
-    }
-    
-    // Close Bulk Upload Modal
-    function closeBulkUploadModalFn() {
-        bulkUploadModal.style.display = 'none';
-        document.body.style.overflow = '';
-        bulkUploadForm.reset();
-        bulkPreview.style.display = 'none';
-        fileList.innerHTML = '';
-        fileCount.textContent = '0';
-        uploadProgress.style.display = 'none';
-        progressBar.style.width = '0%';
-        progressText.textContent = '0%';
-    }
-    
-    if (closeBulkUploadModal) {
-        closeBulkUploadModal.addEventListener('click', closeBulkUploadModalFn);
-    }
-    
-    if (cancelBulkUpload) {
-        cancelBulkUpload.addEventListener('click', closeBulkUploadModalFn);
-    }
-    
-    if (bulkUploadModal) {
-        bulkUploadModal.addEventListener('click', function(e) {
-            if (e.target === bulkUploadModal) {
-                closeBulkUploadModalFn();
-            }
-        });
-    }
-    
-    // Preview selected files
-    if (bulkUploadFiles) {
-        bulkUploadFiles.addEventListener('change', function() {
-            if (this.files && this.files.length > 0) {
-                bulkPreview.style.display = 'block';
-                fileList.innerHTML = '';
-                fileCount.textContent = this.files.length;
-                
-                // Display preview for each file
-                for (let i = 0; i < this.files.length; i++) {
-                    const file = this.files[i];
-                    const reader = new FileReader();
-                    
-                    reader.onload = function(e) {
-                        const fileItem = document.createElement('div');
-                        fileItem.className = 'file-item';
-                        fileItem.style.display = 'flex';
-                        fileItem.style.alignItems = 'center';
-                        fileItem.style.marginBottom = '10px';
-                        fileItem.style.padding = '5px';
-                        fileItem.style.borderBottom = '1px solid #dee2e6';
-                        
-                        fileItem.innerHTML = `
-                            <img src="${e.target.result}" alt="${file.name}" style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; border-radius: 4px;">
-                            <div style="flex: 1;">
-                                <div style="font-weight: 500; font-size: 14px;">${file.name}</div>
-                                <div style="color: #6c757d; font-size: 12px;">${(file.size / 1024).toFixed(2)} KB</div>
-                            </div>
-                        `;
-                        
-                        fileList.appendChild(fileItem);
-                    };
-                    
-                    reader.readAsDataURL(file);
-                }
-            } else {
-                bulkPreview.style.display = 'none';
-                fileList.innerHTML = '';
-                fileCount.textContent = '0';
-            }
-        });
-    }
-    
-    // Handle bulk upload form submission
-    if (bulkUploadForm) {
-        bulkUploadForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            if (!bulkUploadFiles.files || bulkUploadFiles.files.length === 0) {
-                alert('Please select files to upload');
-                return;
-            }
-            
-            const formData = new FormData(this);
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalText = submitButton.textContent;
-            
-            // Show loading state
-            submitButton.textContent = 'Uploading...';
-            submitButton.disabled = true;
-            uploadProgress.style.display = 'block';
-            
-            // Upload files with progress tracking
-            const xhr = new XMLHttpRequest();
-            
-            xhr.open('POST', 'ajax/bulk-upload.php', true);
-            
-            xhr.upload.addEventListener('progress', function(e) {
-                if (e.lengthComputable) {
-                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                    progressBar.style.width = percentComplete + '%';
-                    progressText.textContent = percentComplete + '%';
-                }
-            });
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        
-                        if (response.success) {
-                            alert(response.message);
-                            // Reload page to reflect changes
-                            window.location.reload();
-                        } else {
-                            alert('Upload failed: ' + response.message);
-                            submitButton.textContent = originalText;
-                            submitButton.disabled = false;
-                        }
-                    } catch (error) {
-                        console.error('Error parsing response:', error);
-                        alert('Error processing server response. Please try again.');
-                        submitButton.textContent = originalText;
-                        submitButton.disabled = false;
-                    }
-                } else {
-                    alert('Upload failed with status: ' + xhr.status);
-                    submitButton.textContent = originalText;
-                    submitButton.disabled = false;
-                }
-            };
-            
-            xhr.onerror = function() {
-                alert('Upload failed. Please check your connection and try again.');
-                submitButton.textContent = originalText;
-                submitButton.disabled = false;
-            };
-            
-            xhr.send(formData);
-        });
-    }
-});
-</script>
 </body>
 </html>
