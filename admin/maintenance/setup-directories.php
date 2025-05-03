@@ -10,6 +10,28 @@ if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true
     exit;
 }
 
+// Debug information
+$debug_info = [];
+$debug_info[] = "Server OS: " . PHP_OS;
+$debug_info[] = "Document Root: " . $_SERVER['DOCUMENT_ROOT'];
+$debug_info[] = "Script Path: " . __DIR__;
+$debug_info[] = "Server Software: " . $_SERVER['SERVER_SOFTWARE'];
+
+// Enhanced path resolution for XAMPP on Linux
+function get_proper_path($relative_path) {
+    // For XAMPP on Linux, ensure we have the correct base path
+    if (!IS_WINDOWS && strpos($_SERVER['SERVER_SOFTWARE'], 'XAMPP') !== false) {
+        // If the document root doesn't already include /opt/lampp/htdocs
+        if (strpos($_SERVER['DOCUMENT_ROOT'], '/opt/lampp/htdocs') === false) {
+            // Hard-code the path for XAMPP on Linux
+            return '/opt/lampp/htdocs/srms-website' . $relative_path;
+        }
+    }
+    
+    // Default behavior
+    return $_SERVER['DOCUMENT_ROOT'] . $relative_path;
+}
+
 // Required directories
 $directories = [
     '/assets/images/news',
@@ -28,44 +50,60 @@ $results = [];
 foreach ($directories as $dir) {
     // Normalize directory path for cross-platform compatibility
     $dir = str_replace(['\\', '/'], DS, $dir);
-    $full_path = $_SERVER['DOCUMENT_ROOT'] . $dir;
+    $full_path = get_proper_path($dir);
+    
+    $results[] = [
+        'path' => $dir,
+        'full_path' => $full_path, // Add this for debugging
+    ];
     
     if (!is_dir($full_path)) {
-        // Use different permissions for Windows vs Linux
-        $permissions = IS_WINDOWS ? 0777 : 0755;
+        // On Linux XAMPP, we need more permissive permissions
+        $permissions = IS_WINDOWS ? 0777 : 0777; // Always use 0777 for XAMPP on Linux
         
-        $created = mkdir($full_path, $permissions, true);
-        $results[] = [
-            'path' => $dir,
-            'status' => $created ? 'Created' : 'Failed',
-            'error' => $created ? '' : error_get_last()['message']
-        ];
+        // Create the directory with full permissions
+        $created = @mkdir($full_path, $permissions, true);
+        
+        if (!$created) {
+            // Try using system commands for better error handling
+            if (!IS_WINDOWS) {
+                // Execute the mkdir command with sudo if available
+                $cmd = "mkdir -p " . escapeshellarg($full_path);
+                $output = [];
+                exec($cmd . " 2>&1", $output, $return_var);
+                
+                if ($return_var === 0) {
+                    $created = true;
+                    // Set permissions after creation
+                    exec("chmod -R 777 " . escapeshellarg($full_path));
+                } else {
+                    $error_msg = implode("\n", $output);
+                }
+            }
+        }
+        
+        $status = $created ? 'Created' : 'Failed';
+        $error = $created ? '' : (isset($error_msg) ? $error_msg : error_get_last()['message'] ?? 'Unknown error');
+        
+        $results[count($results) - 1]['status'] = $status;
+        $results[count($results) - 1]['error'] = $error;
         
         // Set additional permissions on Linux if needed
         if ($created && !IS_WINDOWS) {
-            // Try to make the directory group-writable
-            @chmod($full_path, 0775);
-            
-            // Try to set the group to web server group if possible
-            if (function_exists('posix_getgrgid') && function_exists('posix_getgid')) {
-                $group = posix_getgrgid(posix_getgid())['name'] ?? 'www-data';
-                @chgrp($full_path, $group);
-            }
+            // Make sure the directory is world-writable
+            @chmod($full_path, 0777);
         }
         
         if (!$created) {
             $success = false;
         }
     } else {
-        $results[] = [
-            'path' => $dir,
-            'status' => 'Already exists',
-            'error' => ''
-        ];
+        $results[count($results) - 1]['status'] = 'Already exists';
+        $results[count($results) - 1]['error'] = '';
         
         // On Linux, ensure existing directories have correct permissions
         if (!IS_WINDOWS) {
-            @chmod($full_path, 0775);
+            @chmod($full_path, 0777);
         }
     }
 }
@@ -82,23 +120,33 @@ $placeholder_images = [
 foreach ($placeholder_images as $path => $url) {
     // Normalize path for cross-platform compatibility
     $path = str_replace(['\\', '/'], DS, $path);
-    $full_path = $_SERVER['DOCUMENT_ROOT'] . $path;
+    $full_path = get_proper_path($path);
     
     if (!file_exists($full_path)) {
+        // Make sure parent directory exists
+        $parent_dir = dirname($full_path);
+        if (!is_dir($parent_dir)) {
+            @mkdir($parent_dir, 0777, true);
+            if (!IS_WINDOWS) {
+                @chmod($parent_dir, 0777);
+            }
+        }
+        
         $image_data = @file_get_contents($url);
         
         if ($image_data) {
-            $saved = file_put_contents($full_path, $image_data);
+            $saved = @file_put_contents($full_path, $image_data);
             
             // Set appropriate file permissions on Linux
             if ($saved && !IS_WINDOWS) {
-                @chmod($full_path, 0664); // rw-rw-r--
+                @chmod($full_path, 0666); // rw-rw-rw-
             }
             
             $results[] = [
                 'path' => $path,
+                'full_path' => $full_path,
                 'status' => $saved ? 'Created' : 'Failed',
-                'error' => $saved ? '' : error_get_last()['message']
+                'error' => $saved ? '' : error_get_last()['message'] ?? 'Unknown error'
             ];
             
             if (!$saved) {
@@ -107,14 +155,16 @@ foreach ($placeholder_images as $path => $url) {
         } else {
             $results[] = [
                 'path' => $path,
+                'full_path' => $full_path,
                 'status' => 'Failed to download',
-                'error' => error_get_last()['message']
+                'error' => error_get_last()['message'] ?? 'Unknown error'
             ];
             $success = false;
         }
     } else {
         $results[] = [
             'path' => $path,
+            'full_path' => $full_path,
             'status' => 'Already exists',
             'error' => ''
         ];
@@ -136,7 +186,7 @@ foreach ($placeholder_images as $path => $url) {
             max-width: 800px;
             margin: 0 auto;
         }
-        h1 {
+        h1, h2 {
             color: #0a3060;
         }
         .status {
@@ -174,10 +224,25 @@ foreach ($placeholder_images as $path => $url) {
         .exists {
             color: #6c757d;
         }
+        .debug-info {
+            background-color: #e2e3e5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
     <h1>Directory Setup</h1>
+    
+    <div class="debug-info">
+        <h2>System Information</h2>
+        <ul>
+            <?php foreach ($debug_info as $info): ?>
+            <li><?php echo htmlspecialchars($info); ?></li>
+            <?php endforeach; ?>
+        </ul>
+    </div>
     
     <div class="status <?php echo $success ? 'success' : 'error'; ?>">
         <?php echo $success ? 'All directories and placeholders were set up successfully!' : 'There were issues setting up some directories or placeholders.'; ?>
@@ -187,6 +252,7 @@ foreach ($placeholder_images as $path => $url) {
         <thead>
             <tr>
                 <th>Path</th>
+                <th>Full Path</th>
                 <th>Status</th>
                 <th>Error</th>
             </tr>
@@ -195,14 +261,28 @@ foreach ($placeholder_images as $path => $url) {
             <?php foreach ($results as $result): ?>
             <tr>
                 <td><?php echo htmlspecialchars($result['path']); ?></td>
-                <td class="<?php echo strtolower($result['status']) === 'created' ? 'created' : (strtolower($result['status']) === 'failed' ? 'failed' : 'exists'); ?>">
-                    <?php echo htmlspecialchars($result['status']); ?>
+                <td><?php echo htmlspecialchars($result['full_path'] ?? 'N/A'); ?></td>
+                <td class="<?php echo isset($result['status']) ? (strtolower($result['status']) === 'created' ? 'created' : (strtolower($result['status']) === 'failed' ? 'failed' : 'exists')) : ''; ?>">
+                    <?php echo htmlspecialchars($result['status'] ?? 'Unknown'); ?>
                 </td>
-                <td><?php echo htmlspecialchars($result['error']); ?></td>
+                <td><?php echo htmlspecialchars($result['error'] ?? ''); ?></td>
             </tr>
             <?php endforeach; ?>
         </tbody>
     </table>
+    
+    <h2>Manual Fix Instructions</h2>
+    <p>If you're still experiencing issues, try running these commands manually from the terminal:</p>
+    <pre style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/news
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/events
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/promotional
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/facilities
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/campus
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/people
+        sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/uploads/temp
+        sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets
+    </pre>
     
     <p><a href="../index.php">Back to Dashboard</a></p>
 </body>
