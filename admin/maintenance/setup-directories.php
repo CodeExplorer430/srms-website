@@ -2,7 +2,7 @@
 session_start();
 
 // Include environment settings
-require_once __DIR__ . '/../environment.php';
+require_once __DIR__ . '/../../environment.php';
 
 // Security check
 if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {

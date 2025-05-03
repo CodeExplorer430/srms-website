@@ -242,6 +242,15 @@ Login credentials for the initial admin account:
 - Username: admin
 - Password: password (should be changed immediately after first login)
 
+### Admin Panel Notes
+
+When working with the administrative interface:
+
+- Use proper relative paths when accessing resources across directories
+- Remember that admin scripts require session authentication
+- The `setup-directories.php` utility requires proper permissions to create directories
+- Media management functions have robust error handling for cross-platform compatibility
+
 ## Troubleshooting
 
 ### Common Issues
@@ -264,6 +273,24 @@ Login credentials for the initial admin account:
    - Use the provided file_exists_with_alternatives() function for file operations
    - Always normalize paths with str_replace(['\\', '/'], DS, $path)
    - Use forward slashes in HTML/CSS/JavaScript paths
+
+5. **PHP Variable Initialization Issues**:
+   - Always initialize variables before use in PHP files
+   - For conditional displays, set default values at the top of scripts
+   - Use the check-environment.php tool to scan for common PHP errors
+
+## Debugging and Development
+
+For development environments, you can enable more detailed error reporting:
+
+1. Create a `.env.development` file in the project root
+2. Set `DEBUG_MODE=true` in this file
+3. The application will show detailed error messages when in development mode
+
+When troubleshooting issues:
+- Check the PHP error logs
+- Use browser developer tools to inspect network requests
+- The application logs specific errors to `/path/to/srms-website/logs/error.log`
 
 ## Maintenance and Updates
 

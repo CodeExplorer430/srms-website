@@ -23,6 +23,10 @@ $media_counts = [
     'campus' => 0
 ];
 
+// Initialize status variables
+$delete_success = false;
+$delete_error = null;
+
 // Count images in each directory
 $media_directories = [
     'news' => '/assets/images/news',
