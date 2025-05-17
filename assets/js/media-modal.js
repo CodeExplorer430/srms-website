@@ -102,7 +102,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (previewDetails) previewDetails.innerHTML = '';
                 
                 // Disable insert button until something is selected
-                if (insertButton) insertButton.classList.add('disabled');
+                if (insertButton) {
+                    insertButton.classList.add('disabled');
+                    insertButton.disabled = true; // Explicitly set the disabled property
+                }
                 
                 // Show modal
                 mediaModal.style.display = 'block';
@@ -348,14 +351,30 @@ document.addEventListener('DOMContentLoaded', function() {
                             formattedPath = match[0];
                         }
                         
+                        console.log('Setting image path via media modal:', formattedPath);
+                        
                         // Set field value
                         field.value = formattedPath;
                         
-                        // Trigger change event to update preview if it exists
-                        try {
-                            field.dispatchEvent(new Event('change'));
-                        } catch (eventError) {
-                            console.error('Error dispatching change event:', eventError);
+                        // ALWAYS use the global function when available
+                        if (typeof window.selectMediaItem === 'function') {
+                            console.log('Using global selectMediaItem function');
+                            window.selectMediaItem(formattedPath);
+                        } else {
+                            console.warn('Global selectMediaItem function not found, using fallback');
+                            // Fallback only if global function is not available
+                            try {
+                                const event = new Event('input', { bubbles: true });
+                                field.dispatchEvent(event);
+                            } catch (eventError) {
+                                console.error('Error dispatching event:', eventError);
+                            }
+                        }
+                        
+                        // Clear any file upload to avoid conflicts
+                        const fileInput = document.getElementById('image_upload');
+                        if (fileInput) {
+                            fileInput.value = '';
                         }
                     }
                     

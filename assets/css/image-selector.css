@@ -1,0 +1,153 @@
+/* Enhanced Image Selector Component Styles */
+.image-preview-container {
+    margin-top: 15px;
+    margin-bottom: 20px;
+    position: relative;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.image-preview {
+    width: 100%;
+    height: 200px;
+    border: 2px dashed #ced4da;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    background-color: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.preview-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+.preview-placeholder i {
+    font-size: 48px;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+.image-preview img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    display: block;
+}
+
+.image-source-indicator {
+    text-align: right;
+    font-size: 13px;
+    margin-top: 8px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    display: inline-block;
+    float: right;
+}
+
+/* Mode-specific styling */
+.image-preview-container.library-mode .image-preview {
+    border-color: #28a745;
+    border-style: solid;
+    background-color: rgba(40, 167, 69, 0.05);
+}
+
+.image-preview-container.library-mode .image-source-indicator span {
+    color: #28a745;
+}
+
+.image-preview-container.upload-mode .image-preview {
+    border-color: #007bff;
+    border-style: solid;
+    background-color: rgba(0, 123, 255, 0.05);
+}
+
+.image-preview-container.upload-mode .image-source-indicator span {
+    color: #007bff;
+}
+
+.image-preview-container.error-mode .image-preview {
+    border-color: #dc3545;
+    border-style: solid;
+    background-color: rgba(220, 53, 69, 0.05);
+}
+
+.image-preview-container.error-mode .image-source-indicator span {
+    color: #dc3545;
+}
+
+/* Critical overrides to force our styling to take priority */
+.image-preview-container {
+    margin-top: 15px !important;
+    margin-bottom: 20px !important;
+    position: relative !important;
+    border-radius: 6px !important;
+    transition: all 0.3s ease !important;
+}
+
+.image-preview-container.library-mode .image-preview {
+    border-color: #28a745 !important;
+    border-style: solid !important;
+    background-color: rgba(40, 167, 69, 0.05) !important;
+}
+
+.image-preview-container.upload-mode .image-preview {
+    border-color: #007bff !important;
+    border-style: solid !important;
+    background-color: rgba(0, 123, 255, 0.05) !important;
+}
+
+.image-preview-container.error-mode .image-preview {
+    border-color: #dc3545 !important;
+    border-style: solid !important;
+    background-color: rgba(220, 53, 69, 0.05) !important;
+}
+
+/* EMERGENCY ISOLATION STYLES */
+#unified-image-preview {
+    position: relative !important;
+    margin: 15px 0 20px !important;
+    z-index: 2 !important; /* Ensure our preview is on top */
+}
+
+#unified-image-preview .image-preview {
+    border-width: 2px !important;
+    border-style: dashed !important;
+    border-color: #ced4da !important;
+}
+
+#unified-image-preview.library-mode .image-preview {
+    border-color: #28a745 !important;
+    border-style: solid !important;
+}
+
+#unified-image-preview.upload-mode .image-preview {
+    border-color: #007bff !important;
+    border-style: solid !important;
+}
+
+#unified-image-preview.error-mode .image-preview {
+    border-color: #dc3545 !important;
+    border-style: solid !important;
+}
+
+/* HIDE ALL OTHER PREVIEW CONTAINERS */
+.image-preview-container:not(#unified-image-preview) {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}

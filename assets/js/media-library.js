@@ -1,9 +1,9 @@
 /**
  * Media Library functionality for St. Raphaela Mary School Admin
- * Version: 2.1 (Error-fixed enhanced version)
+ * Version: 3.0 (Truly Unified Image Preview)
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Loading Media Library v2.1 (Enhanced Error Handling)');
+    console.log('Loading Media Library v3.0 (Truly Unified Image Preview)');
     
     // Utility functions for safer DOM operations
     function safeQuerySelector(element, selector) {
@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Disable insert button by default (no selection)
         if (insertButton) {
             insertButton.disabled = true;
+            insertButton.classList.add('disabled');
         }
         
         // Open media library modal
@@ -72,6 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (insertButton) {
                     insertButton.setAttribute('data-target', targetField);
                     insertButton.disabled = true;
+                    insertButton.classList.add('disabled');
                 }
                 mediaModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
@@ -143,6 +145,35 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.error('Error selecting media item:', error);
                 }
             });
+            
+            // Add double-click for faster selection
+            item.addEventListener('dblclick', function() {
+                try {
+                    const path = safeAttribute(this, 'data-path') || '';
+                    const targetField = insertButton ? insertButton.getAttribute('data-target') : 'image';
+                    const inputField = document.getElementById(targetField);
+                    
+                    if (inputField && path) {
+                        // Update input field value
+                        inputField.value = path;
+                        
+                        // Use global function if available
+                        if (typeof window.selectMediaItem === 'function') {
+                            window.selectMediaItem(path);
+                        } else {
+                            // Fallback: Trigger change event to update preview
+                            const event = new Event('input');
+                            inputField.dispatchEvent(event);
+                        }
+                        
+                        // Close modal
+                        mediaModal.style.display = 'none';
+                        document.body.style.overflow = '';
+                    }
+                } catch (error) {
+                    console.error('Error handling double-click:', error);
+                }
+            });
         });
         
         // Insert selected media - with error handling
@@ -163,9 +194,20 @@ document.addEventListener('DOMContentLoaded', function() {
                             if (inputField) {
                                 inputField.value = path;
                                 
-                                // Trigger change event to update preview
-                                const event = new Event('change');
-                                inputField.dispatchEvent(event);
+                                // Use global function if available
+                                if (typeof window.selectMediaItem === 'function') {
+                                    window.selectMediaItem(path);
+                                } else {
+                                    // Fallback: Trigger input event to update preview
+                                    const event = new Event('input');
+                                    inputField.dispatchEvent(event);
+                                }
+                                
+                                // Clear any file upload to avoid conflicts
+                                const fileInput = document.getElementById('image_upload');
+                                if (fileInput) {
+                                    fileInput.value = '';
+                                }
                                 
                                 // Close modal
                                 mediaModal.style.display = 'none';
@@ -254,47 +296,92 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log('Filtering items - Category:', category, 'Search:', searchTerm);
             
             try {
-                // Get all items with fallback
-                const items = mediaModal.querySelectorAll('.media-item') || [];
+                // Get all category sections with fallback
+                const categorySections = mediaModal.querySelectorAll('.category-section') || [];
                 const searchLower = (searchTerm || '').toLowerCase();
                 
-                // Process each item
-                items.forEach(item => {
-                    if (!item) return; // Skip if item is null
+                // First hide/show entire category sections
+                categorySections.forEach(section => {
+                    if (!section) return; // Skip if section is null
                     
                     try {
-                        // Safely get category
-                        let itemCategory = 'unknown';
-                        const categorySection = item.closest('.category-section');
-                        if (categorySection) {
-                            itemCategory = safeAttribute(categorySection, 'data-category') || 'unknown';
-                        }
+                        const sectionCategory = safeAttribute(section, 'data-category') || 'unknown';
                         
-                        // Safely get name
-                        let itemName = '';
-                        const nameElement = safeQuerySelector(item, '.media-name');
-                        if (nameElement) {
-                            itemName = safeTextContent(nameElement).toLowerCase();
-                        }
-                        
-                        // Check category
-                        const categoryMatch = !category || category === 'all' || itemCategory === category;
-                        
-                        // Check search term
-                        const searchMatch = !searchTerm || itemName.includes(searchLower);
-                        
-                        // Show/hide based on filters
-                        if (categoryMatch && searchMatch) {
-                            item.style.display = '';
+                        if (category === 'all' || sectionCategory === category) {
+                            section.style.display = '';
                         } else {
-                            item.style.display = 'none';
+                            section.style.display = 'none';
                         }
-                    } catch (itemError) {
-                        console.error('Error processing filter for item:', itemError);
-                        // Default to showing the item on error
-                        item.style.display = '';
+                    } catch (sectionError) {
+                        console.error('Error processing section for filter:', sectionError);
                     }
                 });
+                
+                // Then filter items within visible sections by search term
+                if (searchTerm) {
+                    const items = mediaModal.querySelectorAll('.media-item') || [];
+                    
+                    items.forEach(item => {
+                        if (!item) return; // Skip if item is null
+                        
+                        try {
+                            // Check if the item's section is visible
+                            const section = item.closest('.category-section');
+                            if (section && section.style.display !== 'none') {
+                                // Safely get name
+                                let itemName = '';
+                                const nameElement = safeQuerySelector(item, '.media-name');
+                                if (nameElement) {
+                                    itemName = safeTextContent(nameElement).toLowerCase();
+                                }
+                                
+                                // Show/hide based on search
+                                if (itemName.includes(searchLower)) {
+                                    item.style.display = '';
+                                } else {
+                                    item.style.display = 'none';
+                                }
+                            }
+                        } catch (itemError) {
+                            console.error('Error processing filter for item:', itemError);
+                            // Default to showing the item on error
+                            item.style.display = '';
+                        }
+                    });
+                    
+                    // Check if any visible sections have no visible items - show "no results" message
+                    categorySections.forEach(section => {
+                        if (!section || section.style.display === 'none') return;
+                        
+                        const visibleItems = section.querySelectorAll('.media-item[style="display: none;"]');
+                        const totalItems = section.querySelectorAll('.media-item');
+                        
+                        // If all items are hidden, show a "no results" message
+                        if (visibleItems.length === totalItems.length) {
+                            // Check if a no-results message already exists
+                            let noResultsMsg = section.querySelector('.no-search-results');
+                            
+                            if (!noResultsMsg) {
+                                // Create one if it doesn't exist
+                                noResultsMsg = document.createElement('div');
+                                noResultsMsg.className = 'no-search-results';
+                                noResultsMsg.style.padding = '20px';
+                                noResultsMsg.style.textAlign = 'center';
+                                noResultsMsg.style.color = '#6c757d';
+                                section.appendChild(noResultsMsg);
+                            }
+                            
+                            noResultsMsg.innerHTML = `No results found for "${searchTerm}" in this category.`;
+                            noResultsMsg.style.display = 'block';
+                        } else {
+                            // Hide the no-results message if it exists
+                            const noResultsMsg = section.querySelector('.no-search-results');
+                            if (noResultsMsg) {
+                                noResultsMsg.style.display = 'none';
+                            }
+                        }
+                    });
+                }
             } catch (filterError) {
                 console.error('Error in filter function:', filterError);
             }
@@ -357,103 +444,71 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (error) {
         console.error('Error initializing media library:', error);
     }
-    
-    // Image preview functionality with error handling
-    function initImagePreview() {
-        try {
-            const imageInputs = document.querySelectorAll('input[type="text"][id$="image"]') || [];
-            
-            imageInputs.forEach(input => {
-                if (!input) return; // Skip if input is null
-                
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Fix insert button behavior
+    setTimeout(function() {
+        const insertButton = document.querySelector('.insert-media');
+        if (insertButton) {
+            const originalClick = insertButton.onclick;
+            insertButton.onclick = function(e) {
                 try {
-                    const previewContainer = document.createElement('div');
-                    previewContainer.className = 'image-preview-container';
-                    previewContainer.innerHTML = `
-                        <div class="image-preview">
-                            <div class="preview-placeholder">
-                                <i class='bx bx-image'></i>
-                                <span>No image selected</span>
-                            </div>
-                            <img src="" alt="Preview" style="display: none;">
-                        </div>
-                    `;
+                    // Prevent default action
+                    e.preventDefault();
                     
-                    // Insert preview after parent element of input (usually a form-group)
-                    const parent = input.closest('.form-group');
-                    if (parent) {
-                        parent.appendChild(previewContainer);
-                    } else if (input.parentNode) {
-                        input.parentNode.insertBefore(previewContainer, input.nextSibling);
+                    // Get selected item
+                    const mediaModal = document.getElementById('media-library-modal');
+                    const selectedItem = mediaModal.querySelector('.media-item.selected');
+                    
+                    if (selectedItem) {
+                        // Get path
+                        const path = selectedItem.getAttribute('data-path');
+                        if (path) {
+                            // Update the input field
+                            const targetField = this.getAttribute('data-target') || 'image';
+                            const inputField = document.getElementById(targetField);
+                            
+                            if (inputField) {
+                                // Update input field
+                                inputField.value = path;
+                                
+                                // Use our global function
+                                if (typeof window.selectMediaItem === 'function') {
+                                    window.selectMediaItem(path);
+                                }
+                            }
+                            
+                            // Close the modal
+                            mediaModal.style.display = 'none';
+                        }
                     }
-                    
-                    // Update preview when path changes
-                    input.addEventListener('change', function() {
-                        safeUpdateImagePreview(this, previewContainer);
-                    });
-                    
-                    // Initial preview
-                    if (input.value) {
-                        safeUpdateImagePreview(input, previewContainer);
-                    }
-                } catch (inputError) {
-                    console.error('Error setting up preview for input:', inputError);
+                } catch (error) {
+                    console.error('Error in media library insert button handler:', error);
                 }
-            });
-        } catch (error) {
-            console.error('Error initializing image previews:', error);
+            };
         }
-        
-        // Update preview function with complete error handling
-        function safeUpdateImagePreview(input, container) {
-            try {
-                if (!input || !container) return;
-                
-                const path = input.value || '';
-                const previewImg = container.querySelector('img');
-                const placeholder = container.querySelector('.preview-placeholder');
-                
-                if (!previewImg || !placeholder) return;
-                
-                if (!path) {
-                    previewImg.style.display = 'none';
-                    placeholder.style.display = 'flex';
-                    return;
-                }
-                
-                // Set image source
-                previewImg.src = path.startsWith('/') ? path : '/' + path;
-                
-                // Show loading state
-                previewImg.style.opacity = '0.5';
-                placeholder.innerHTML = '<i class="bx bx-loader-alt bx-spin"></i><span>Loading...</span>';
-                placeholder.style.display = 'flex';
-                
-                // Check if image loads
-                previewImg.onload = function() {
-                    previewImg.style.opacity = '1';
-                    previewImg.style.display = 'block';
-                    placeholder.style.display = 'none';
-                };
-                
-                previewImg.onerror = function() {
-                    previewImg.style.display = 'none';
-                    placeholder.innerHTML = `
-                        <i class='bx bx-error-circle'></i>
-                        <span>Image not found:<br>${path}</span>
-                    `;
-                    placeholder.style.display = 'flex';
-                };
-            } catch (error) {
-                console.error('Error updating image preview:', error);
-            }
-        }
-    }
+    }, 500);
+});
+
+// Make sure our global selectMediaItem function is only called once
+// This prevents double-triggering when media library selects an item
+document.addEventListener('DOMContentLoaded', function() {
+    // Store the original function if it exists
+    const originalSelectMediaItem = window.selectMediaItem;
     
-    // Initialize image previews
-    try {
-        initImagePreview();
-    } catch (error) {
-        console.error('Error initializing image previews:', error);
-    }
+    // Debounce wrapper to prevent multiple rapid calls
+    window.selectMediaItem = function(path) {
+        if (typeof originalSelectMediaItem === 'function') {
+            // Clear any pending calls
+            if (window.selectMediaItemTimeout) {
+                clearTimeout(window.selectMediaItemTimeout);
+            }
+            
+            // Set up new delayed call
+            window.selectMediaItemTimeout = setTimeout(function() {
+                originalSelectMediaItem(path);
+            }, 50);
+        }
+    };
 });

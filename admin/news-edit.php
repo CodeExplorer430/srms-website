@@ -1,4 +1,3 @@
-
 <?php
 session_start();
 
@@ -16,7 +15,6 @@ include_once '../includes/functions.php';
 $db = new Database();
 
 // Initialize variables
-// Initialize variables
 $id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 $title = '';
 $slug = '';
@@ -27,6 +25,7 @@ $published_date = date('Y-m-d H:i:s');
 $status = 'draft';
 $featured = 0;
 $errors = [];
+$warnings = [];
 $success = false;
 $upload_result = false;
 
@@ -86,13 +85,23 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
        if ($upload_result) {
            // Use the new image path immediately
            $image = $upload_result;
+           
+           // Ensure path is properly formatted for web display
+           $image = str_replace('\\', '/', $image);
+           
+           // Make sure path starts with a slash
+           if (strpos($image, '/') !== 0) {
+               $image = '/' . $image;
+           }
+           
            // Add a small delay to ensure file is written to disk
            usleep(500000); // 0.5 second delay
            
-           // Verify the file exists after upload
-           if (!verify_image_exists($image)) {
-               error_log("Warning: Uploaded file not immediately found at: " . $image);
-           }
+           // Flush file cache to ensure file existence checks work
+           clearstatcache(true, $_SERVER['DOCUMENT_ROOT'] . $image);
+           
+           // Log the successful upload
+           error_log("File uploaded successfully to: " . $image);
        } else {
            $errors[] = 'Image upload failed. Please check file type and size.';
        }
@@ -108,10 +117,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
        // Add warning but don't prevent saving
        $warnings[] = 'The specified image path could not be verified. Please check that the file exists.';
    }
-   
 
-    // Clean up image path (remove double slashes, etc.)
-    $image = isset($_POST['image']) ? trim($_POST['image']) : '';
+    // Only use the text input if no file was uploaded
+    if (!$upload_result) {
+        $image = isset($_POST['image']) ? trim($_POST['image']) : '';
+    }
+
+    // Now standardize the path - this preserves the upload result if it exists
     $image = standardize_image_path($image);
 
     // Add after successful file upload in news-edit.php
@@ -124,6 +136,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             clearstatcache(true, $full_upload_path);
         }
     }
+    
     // Convert legacy paths to new asset structure
     if (!empty($image) && strpos($image, '/images/') === 0) {
         // Determine appropriate directory based on filename pattern
@@ -228,6 +241,9 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo $id > 0 ? 'Edit' : 'Add'; ?> News Article | Admin Dashboard</title>
     <link rel="stylesheet" href="../assets/css/styles.css">
+    <!-- Load image-related CSS first -->
+    <link rel="stylesheet" href="../assets/css/image-selector.css">
+    <link rel="stylesheet" href="../assets/css/media-library.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         body {
@@ -400,6 +416,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 4px;
             margin-bottom: 20px;
         }
+        .warning-message {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
         
         .image-input-group {
             display: flex;
@@ -419,10 +442,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             cursor: pointer;
             white-space: nowrap;
         }
-
+        
         .image-preview-container {
             margin-top: 15px;
             margin-bottom: 20px;
+            position: relative;
         }
 
         .image-preview {
@@ -432,28 +456,40 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 4px;
             overflow: hidden;
             position: relative;
-        }
-
-        .preview-placeholder {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            background-color: #f8f9fa;
             display: flex;
             align-items: center;
             justify-content: center;
+        }
+
+        .preview-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            padding: 20px;
             color: #6c757d;
-            font-size: 14px;
-            background-color: #f8f9fa;
+        }
+
+        .preview-placeholder i {
+            font-size: 32px;
+            margin-bottom: 10px;
         }
 
         .image-preview img {
-            width: 100%;
-            height: 100%;
+            max-width: 100%;
+            max-height: 200px;
             object-fit: contain;
+            display: block;
         }
-</style>
+
+        .image-source-indicator {
+            text-align: right;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
 </head>
 <body>
     <div class="admin-container">
@@ -563,73 +599,51 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <small style="color:#666;">Enter image path or use the media library to select an image</small>
                         
-                        <div class="image-preview-container">
+                        <div id="unified-image-preview" class="image-preview-container">
                             <div class="image-preview">
-                                <div class="preview-placeholder">No image selected</div>
-                                <img src="" alt="Preview" style="display: none;">
+                                <div id="preview-placeholder" class="preview-placeholder">
+                                    <i class='bx bx-image'></i>
+                                    <span>No image selected</span>
+                                    <small>Select from media library or upload a new image</small>
+                                </div>
+                                <img src="<?php echo !empty($image) ? htmlspecialchars($image) : ''; ?>" 
+                                    alt="Preview" 
+                                    id="preview-image" 
+                                    style="<?php echo empty($image) ? 'display: none;' : ''; ?>">
                             </div>
+                            <div id="source-indicator" class="image-source-indicator"></div>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="image_upload">Upload New Image</label>
                             <input type="file" id="image_upload" name="image_upload" accept="image/jpeg, image/png, image/gif">
                             <small style="color:#666;">Max file size: 2MB. Accepted formats: JPEG, PNG, GIF</small>
                         </div>
                     </div>
-
-                        <?php if (!empty($image)): 
-                            // More comprehensive image verification
-                            $server_root = $_SERVER['DOCUMENT_ROOT'];
-                            $image_full_path = $server_root . $image;
-                            $image_exists = file_exists($image_full_path);
-                            $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($image, '/');
-                            $alt_exists = file_exists($alt_path);
-                            $best_match = find_best_matching_image($image);
-                        ?>
-                            <div style="margin-top:10px; padding:10px; border-radius:4px; background-color:<?php echo ($image_exists || $alt_exists) ? '#d4edda' : '#f8d7da'; ?>; color:<?php echo ($image_exists || $alt_exists) ? '#155724' : '#721c24'; ?>;">
-                                <?php if ($image_exists || $alt_exists): ?>
-                                    <i class='bx bx-check-circle'></i> Image file exists at this path
-                                <?php elseif ($best_match): ?>
-                                    <i class='bx bx-check-circle'></i> Similar image found at: <?php echo htmlspecialchars($best_match); ?>
-                                <?php else: ?>
-                                    <i class='bx bx-x-circle'></i> Image file not found at this path
-                                    <div style="margin-top:5px; font-size:12px;">
-                                        Tried: <?php echo htmlspecialchars($image_full_path); ?><br>
-                                        And: <?php echo htmlspecialchars($alt_path); ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                    <script>
-                    document.addEventListener('DOMContentLoaded', function() {
-                        const imagePathList = document.querySelectorAll('.available-images ul li');
-                        const imageInput = document.getElementById('image');
-                        
-                        imagePathList.forEach(item => {
-                            item.style.cursor = 'pointer';
-                            item.style.padding = '5px';
-                            item.style.marginBottom = '5px';
-                            item.style.transition = 'background-color 0.2s';
-                            
-                            item.addEventListener('mouseover', function() {
-                                this.style.backgroundColor = '#e9f5ff';
-                            });
-                            
-                            item.addEventListener('mouseout', function() {
-                                this.style.backgroundColor = 'transparent';
-                            });
-                            
-                            item.addEventListener('click', function() {
-                                imageInput.value = this.textContent.trim();
-                                // Close the details element after selection
-                                const details = document.querySelector('.available-images details');
-                                details.open = false;
-                            });
-                        });
-                    });
-                    </script>
                     
+                    <?php if (!empty($image)): 
+                        // More comprehensive image verification
+                        $server_root = $_SERVER['DOCUMENT_ROOT'];
+                        $image_full_path = $server_root . $image;
+                        $image_exists = file_exists($image_full_path);
+                        $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($image, '/');
+                        $alt_exists = file_exists($alt_path);
+                        $best_match = find_best_matching_image($image);
+                    ?>
+                        <div style="margin-top:10px; padding:10px; border-radius:4px; background-color:<?php echo ($image_exists || $alt_exists) ? '#d4edda' : '#f8d7da'; ?>; color:<?php echo ($image_exists || $alt_exists) ? '#155724' : '#721c24'; ?>;">
+                            <?php if ($image_exists || $alt_exists): ?>
+                                <i class='bx bx-check-circle'></i> Image file exists at this path
+                            <?php elseif ($best_match): ?>
+                                <i class='bx bx-check-circle'></i> Similar image found at: <?php echo htmlspecialchars($best_match); ?>
+                            <?php else: ?>
+                                <i class='bx bx-x-circle'></i> Image file not found at this path
+                                <div style="margin-top:5px; font-size:12px;">
+                                    Tried: <?php echo htmlspecialchars($image_full_path); ?><br>
+                                    And: <?php echo htmlspecialchars($alt_path); ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
                     
                     <div class="form-group">
                         <label for="published_date">Published Date</label>
@@ -655,15 +669,59 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <button type="submit" class="save-btn">Save Article</button>
                     </div>
                 </form>
-                <link rel="stylesheet" href="../assets/css/media-library.css">
-                <script src="../assets/js/media-library.js"></script>
             </div>
         </div>
     </div>
-</body>
-</html>
 
-<?php 
+<?php
+// Disable any preview conflicts
+$disable_media_library_preview = true;
+
+// Include the media library
 include_once '../admin/includes/media-library.php';
 render_media_library('image');
 ?>
+
+<!-- Load scripts in the correct order -->
+<script src="../assets/js/media-library.js"></script>
+<script src="../assets/js/unified-image-uploader.js"></script>
+
+<script>
+// Connect the unified image uploader with the media library
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Connecting unified uploader with media library...');
+    
+    // Initialize the image from existing path if any
+    const imageInput = document.getElementById('image');
+    if (imageInput && imageInput.value.trim()) {
+        setTimeout(function() {
+            if (window.UnifiedImageUploader) {
+                window.UnifiedImageUploader.selectMediaItem(imageInput.value);
+            }
+        }, 200);
+    }
+    
+    // Connect insert button from media library to unified uploader
+    const mediaModal = document.getElementById('media-library-modal');
+    if (mediaModal) {
+        const insertButton = mediaModal.querySelector('.insert-media');
+        if (insertButton) {
+            insertButton.addEventListener('click', function() {
+                try {
+                    const selectedItem = mediaModal.querySelector('.media-item.selected');
+                    if (selectedItem) {
+                        const path = selectedItem.getAttribute('data-path');
+                        if (window.UnifiedImageUploader && path) {
+                            window.UnifiedImageUploader.selectMediaItem(path);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error connecting media library to unified uploader:', error);
+                }
+            });
+        }
+    }
+});
+</script>
+</body>
+</html>

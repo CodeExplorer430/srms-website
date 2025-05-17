@@ -75,6 +75,7 @@ function get_media_library_assets() {
 
 // Output the media library modal HTML
 function render_media_library($target_field = 'image') {
+    global $disable_media_library_preview;
     $media = get_media_library_assets();
 ?>
 <div id="media-library-modal" class="media-library-modal">
@@ -170,14 +171,15 @@ function render_media_library($target_field = 'image') {
         </div>
         
         <div class="media-library-footer">
+            <?php if (!isset($disable_media_library_preview) || $disable_media_library_preview !== true): ?>
             <div class="media-preview">
                 <div class="preview-image"></div>
                 <div class="preview-details"></div>
             </div>
+            <?php endif; ?>
             <button class="insert-media disabled" data-target="<?php echo $target_field; ?>">Insert Selected Image</button>
         </div>
     </div>
 </div>
 <?php
 }
-?>
