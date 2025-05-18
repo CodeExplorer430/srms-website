@@ -30,10 +30,20 @@ $image = '';
 $published_date = date('Y-m-d H:i:s');
 $status = 'draft';
 $featured = 0;
+$category = ''; // New variable for category
 $errors = [];
 $warnings = [];
 $success = false;
 $upload_result = false;
+
+// Check if category column exists in the database
+$has_category_column = false;
+try {
+    $check_category = $db->fetch_row("SHOW COLUMNS FROM news LIKE 'category'");
+    $has_category_column = !empty($check_category);
+} catch (Exception $e) {
+    error_log("Error checking for category column: " . $e->getMessage());
+}
 
 // Load article data if editing
 if ($id > 0) {
@@ -47,6 +57,11 @@ if ($id > 0) {
         $published_date = $article['published_date'];
         $status = $article['status'];
         $featured = $article['featured'];
+        
+        // Get the category if the column exists
+        if ($has_category_column && isset($article['category'])) {
+            $category = $article['category'];
+        }
     } else {
         $errors[] = 'Article not found';
     }
@@ -62,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $published_date = isset($_POST['published_date']) ? trim($_POST['published_date']) : date('Y-m-d H:i:s');
     $status = isset($_POST['status']) ? trim($_POST['status']) : 'draft';
     $featured = isset($_POST['featured']) ? 1 : 0;
+    $category = isset($_POST['category']) ? trim($_POST['category']) : ''; // Get category from form
     
     // Validate inputs
     if (empty($title)) {
@@ -77,11 +93,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Content is required';
     }
 
+    // Auto-detect category if not set and this is a new article
+    if (empty($category) && $id == 0) {
+        if (strpos(strtolower($title), 'alumni') !== false || strpos(strtolower($content), 'alumni') !== false) {
+            $category = 'alumni';
+        } elseif (strpos(strtolower($title), 'event') !== false || strpos(strtolower($content), 'event') !== false) {
+            $category = 'events';
+        } elseif (strpos(strtolower($title), 'announce') !== false || strpos(strtolower($content), 'announce') !== false) {
+            $category = 'announcement';
+        } else {
+            $category = 'general';
+        }
+    }
+
     // Determine proper destination folder based on context
     $destination_folder = 'news';
-    if (strpos(strtolower($title), 'event') !== false || 
+    if ($category === 'events' || strpos(strtolower($title), 'event') !== false || 
         strpos(strtolower($summary), 'event') !== false) {
         $destination_folder = 'events';
+    } elseif ($category === 'alumni') {
+        $destination_folder = 'events'; // Use events folder for alumni events too
     }
     
     // Process image upload first
@@ -209,21 +240,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $summary = $db->escape($summary);
         $image = $db->escape($image);
         $published_date = $db->escape($published_date);
+        $category = $db->escape($category);
         $author_id = $_SESSION['admin_user_id'];
         
         if ($id > 0) {
             // Update existing article
-            $sql = "UPDATE news SET 
-                    title = '$title', 
-                    slug = '$slug', 
-                    content = '$content', 
-                    summary = '$summary', 
-                    image = '$image', 
-                    published_date = '$published_date', 
-                    status = '$status', 
-                    featured = $featured 
-                    WHERE id = $id";
-                    
+            if ($has_category_column) {
+                // With category support
+                $sql = "UPDATE news SET 
+                        title = '$title', 
+                        slug = '$slug', 
+                        content = '$content', 
+                        summary = '$summary', 
+                        image = '$image', 
+                        published_date = '$published_date', 
+                        status = '$status', 
+                        featured = $featured,
+                        category = '$category'
+                        WHERE id = $id";
+            } else {
+                // Without category support
+                $sql = "UPDATE news SET 
+                        title = '$title', 
+                        slug = '$slug', 
+                        content = '$content', 
+                        summary = '$summary', 
+                        image = '$image', 
+                        published_date = '$published_date', 
+                        status = '$status', 
+                        featured = $featured
+                        WHERE id = $id";
+            }
+                        
             if ($db->query($sql)) {
                 $success = true;
             } else {
@@ -231,9 +279,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         } else {
             // Insert new article
-            $sql = "INSERT INTO news (title, slug, content, summary, image, published_date, author_id, status, featured) 
-                    VALUES ('$title', '$slug', '$content', '$summary', '$image', '$published_date', $author_id, '$status', $featured)";
-                    
+            if ($has_category_column) {
+                // With category support
+                $sql = "INSERT INTO news (title, slug, content, summary, image, published_date, author_id, status, featured, category) 
+                        VALUES ('$title', '$slug', '$content', '$summary', '$image', '$published_date', $author_id, '$status', $featured, '$category')";
+            } else {
+                // Without category support
+                $sql = "INSERT INTO news (title, slug, content, summary, image, published_date, author_id, status, featured) 
+                        VALUES ('$title', '$slug', '$content', '$summary', '$image', '$published_date', $author_id, '$status', $featured)";
+            }
+                        
             if ($db->query($sql)) {
                 $id = $db->insert_id();
                 $success = true;
@@ -394,6 +449,34 @@ ob_start();
                 </select>
             </div>
             
+            <?php if ($has_category_column): ?>
+            <!-- Category Field - only shown if the column exists in the database -->
+            <div class="form-group">
+                <label for="category">Category</label>
+                <select id="category" name="category" class="form-control">
+                    <option value="" <?php echo empty($category) ? 'selected' : ''; ?>>-- Select Category --</option>
+                    <option value="general" <?php echo $category === 'general' ? 'selected' : ''; ?>>General</option>
+                    <option value="events" <?php echo $category === 'events' ? 'selected' : ''; ?>>Events</option>
+                    <option value="alumni" <?php echo $category === 'alumni' ? 'selected' : ''; ?>>Alumni</option>
+                    <option value="academic" <?php echo $category === 'academic' ? 'selected' : ''; ?>>Academic</option>
+                    <option value="announcement" <?php echo $category === 'announcement' ? 'selected' : ''; ?>>Announcement</option>
+                </select>
+                <small class="form-text">Categorizing articles helps organize content and display relevant items in specific sections.</small>
+            </div>
+            <?php else: ?>
+            <!-- Display a notice that category support is not available -->
+            <div class="form-group note-box">
+                <div class="note-content">
+                    <i class='bx bx-info-circle'></i>
+                    <div>
+                        <p><strong>Category support is not enabled.</strong></p>
+                        <p>To enable categories for news articles, run this SQL query in your database:</p>
+                        <pre>ALTER TABLE news ADD COLUMN category VARCHAR(50) DEFAULT NULL;</pre>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+            
             <div class="form-group">
                 <label>Article Options</label>
                 <div class="checkbox-styled">
@@ -412,6 +495,37 @@ ob_start();
         </form>
     </div>
 </div>
+
+<style>
+/* Add styles for the note box */
+.note-box {
+    background-color: #f8f9fa;
+    border-left: 4px solid #17a2b8;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.note-content {
+    display: flex;
+    align-items: flex-start;
+}
+
+.note-content i {
+    font-size: 24px;
+    color: #17a2b8;
+    margin-right: 15px;
+}
+
+.note-content pre {
+    background-color: #e9ecef;
+    padding: 10px;
+    border-radius: 4px;
+    overflow: auto;
+    margin-top: 10px;
+    font-size: 14px;
+}
+</style>
 
 <?php
 // Disable any preview conflicts
@@ -456,6 +570,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             });
         }
+    }
+    
+    // Auto-update category based on title (if category exists and is empty)
+    const titleInput = document.getElementById('title');
+    const categorySelect = document.getElementById('category');
+    
+    if (titleInput && categorySelect && categorySelect.value === '') {
+        titleInput.addEventListener('blur', function() {
+            const title = this.value.toLowerCase();
+            if (categorySelect.value === '') {
+                if (title.includes('alumni')) {
+                    categorySelect.value = 'alumni';
+                } else if (title.includes('event')) {
+                    categorySelect.value = 'events';
+                } else if (title.includes('announce')) {
+                    categorySelect.value = 'announcement';
+                }
+            }
+        });
     }
 });
 

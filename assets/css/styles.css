@@ -1751,6 +1751,57 @@ section h2 {
     header .menu-link li:hover > .drop-down {
         display: block;
     }
+
+    /* Add dropdown indicators to menu items with submenus */
+    header .menu-link li:has(.drop-down) > .sub-menu-link:after {
+        content: "+";
+        display: inline-block;
+        margin-left: 8px;
+        font-weight: bold;
+        transition: transform 0.3s ease;
+    }
+    
+    header .menu-link li.show-submenu > .sub-menu-link:after {
+        content: "-";
+        /* Alternative: transform: rotate(45deg); */
+    }
+    
+    /* Enhance submenu styling for mobile */
+    .drop-down {
+        position: static;
+        width: 100%;
+        background-color: rgba(64, 78, 206, 0.85);
+        box-shadow: none;
+        display: none;
+        padding: 0;
+    }
+    
+    /* Show submenu when parent has .show-submenu class */
+    header .menu-link li.show-submenu > .drop-down {
+        display: block;
+    }
+    
+    /* Enhance submenu item styling */
+    header .menu-link li .drop-down li {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 0;
+    }
+    
+    header .menu-link li .drop-down li a {
+        color: #fff;
+        padding: 10px 20px 10px 35px;
+        display: block;
+    }
+    
+    /* Prevent hover from showing dropdown on mobile */
+    header .menu-link li:hover > .drop-down {
+        display: none;
+    }
+    
+    /* Only show when explicitly toggled */
+    header .menu-link li.show-submenu > .drop-down {
+        display: block;
+    }
     
     .alumni-container {
         padding: 20px 15px;

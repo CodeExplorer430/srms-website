@@ -15,8 +15,36 @@ include 'includes/header.php';
 $page_key = 'alumni';
 $page_content = get_page_content($page_key);
 
-// Get alumni events from database (if you have a specific table for this)
-$alumni_events = $db->fetch_all("SELECT * FROM news WHERE category = 'alumni' AND status = 'published' ORDER BY published_date DESC LIMIT 3");
+// Get alumni events from database with error handling
+$alumni_events = [];
+try {
+    // Check if category column exists in the news table
+    $check_category_column = $db->fetch_row("SHOW COLUMNS FROM news LIKE 'category'");
+    
+    if ($check_category_column) {
+        // If category column exists, use it to filter alumni news
+        $alumni_events = $db->fetch_all("SELECT * FROM news 
+                                        WHERE category = 'alumni' 
+                                        AND status = 'published' 
+                                        ORDER BY published_date DESC LIMIT 3");
+    } else {
+        // If no category column, use a title/content search approach
+        $alumni_events = $db->fetch_all("SELECT * FROM news 
+                                       WHERE (title LIKE '%alumni%' OR content LIKE '%alumni%')
+                                       AND status = 'published' 
+                                       ORDER BY published_date DESC LIMIT 3");
+    }
+    
+    // If we still don't have any events, just get the latest news
+    if (empty($alumni_events)) {
+        $alumni_events = $db->fetch_all("SELECT * FROM news 
+                                       WHERE status = 'published' 
+                                       ORDER BY published_date DESC LIMIT 3");
+    }
+} catch (Exception $e) {
+    // Log error but continue with empty array
+    error_log("Error fetching alumni events: " . $e->getMessage());
+}
 ?>
 
 <section class="main-head">

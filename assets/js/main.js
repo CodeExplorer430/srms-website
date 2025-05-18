@@ -88,31 +88,111 @@ function initSlideshow() {
 }
 
 /**
- * Initialize mobile menu functionality
- * Enhances responsive design for mobile devices
+ * Enhanced Mobile Menu Initialization
+ * Adds improved submenu handling, click-outside behavior, and resize handling
  */
 function initMobileMenu() {
-  // Create mobile menu button if it doesn't exist
-  if (!document.querySelector('.mobile-menu-toggle')) {
+    // Get menu elements
     const header = document.querySelector('header');
+    const menuLinks = document.querySelector('.menu-link');
+    
+    if (!header || !menuLinks) return;
+    
+    // Create mobile menu toggle if it doesn't exist
+    let mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
+    
+    if (!mobileMenuToggle) {
+        // Create mobile menu toggle button (keeping your existing structure)
+        mobileMenuToggle = document.createElement('div');
+        mobileMenuToggle.className = 'mobile-menu-toggle';
+        mobileMenuToggle.innerHTML = '<span></span><span></span><span></span>';
         
-    if (!header) return;
+        // Add mobile menu toggle to header
+        header.appendChild(mobileMenuToggle);
+    }
+    
+    // Toggle mobile menu on click (maintain existing behavior)
+    mobileMenuToggle.addEventListener('click', function(e) {
+        e.stopPropagation(); // Prevent event from bubbling to document
+        menuLinks.classList.toggle('active');
+        this.classList.toggle('active');
+    });
+    
+    // Enhanced submenu handling for mobile
+    const menuItemsWithDropdown = document.querySelectorAll('.menu-link > li');
+    
+    menuItemsWithDropdown.forEach(item => {
+        // Check if this menu item has a dropdown
+        const hasDropdown = item.querySelector('.drop-down') !== null;
         
-    // Create mobile menu toggle button
-    const mobileMenuToggle = document.createElement('div');
-    mobileMenuToggle.className = 'mobile-menu-toggle';
-    mobileMenuToggle.innerHTML = '<span></span><span></span><span></span>';
-        
-    // Add mobile menu toggle to header
-    header.appendChild(mobileMenuToggle);
-        
-     // Toggle mobile menu on click
-     mobileMenuToggle.addEventListener('click', function() {
-      const menuLinks = document.querySelector('.menu-link');
-      menuLinks.classList.toggle('active');
-      this.classList.toggle('active');
-  });
-}
+        if (hasDropdown) {
+            // Get the main menu link of this item
+            const mainLink = item.querySelector('.sub-menu-link');
+            
+            if (mainLink) {
+                // Add click event to main link only (not the entire li)
+                mainLink.addEventListener('click', function(e) {
+                    // Only handle specially on mobile view
+                    if (window.innerWidth <= 768) {
+                        e.preventDefault();
+                        
+                        // Close other open submenus
+                        menuItemsWithDropdown.forEach(otherItem => {
+                            if (otherItem !== item && otherItem.classList.contains('show-submenu')) {
+                                otherItem.classList.remove('show-submenu');
+                            }
+                        });
+                        
+                        // Toggle this submenu
+                        item.classList.toggle('show-submenu');
+                    }
+                });
+                
+                // Add special handling for links within the dropdown
+                const dropdownLinks = item.querySelectorAll('.drop-down a');
+                dropdownLinks.forEach(link => {
+                    link.addEventListener('click', function(e) {
+                        // Allow these links to navigate when clicked
+                        e.stopPropagation();
+                    });
+                });
+            }
+        }
+    });
+    
+    // Close menu when clicking outside
+    document.addEventListener('click', function(e) {
+        // If click is outside menu and toggle, and menu is open
+        if (!menuLinks.contains(e.target) && 
+            !mobileMenuToggle.contains(e.target) && 
+            menuLinks.classList.contains('active')) {
+            
+            // Close main menu
+            menuLinks.classList.remove('active');
+            mobileMenuToggle.classList.remove('active');
+            
+            // Close all submenus
+            document.querySelectorAll('.menu-link > li.show-submenu').forEach(item => {
+                item.classList.remove('show-submenu');
+            });
+        }
+    });
+    
+    // Handle window resize
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 768) {
+            // Reset menu state on larger screens
+            if (menuLinks.classList.contains('active')) {
+                menuLinks.classList.remove('active');
+                mobileMenuToggle.classList.remove('active');
+            }
+            
+            // Remove any show-submenu classes
+            document.querySelectorAll('.menu-link > li.show-submenu').forEach(item => {
+                item.classList.remove('show-submenu');
+            });
+        }
+    });
 
 /**
  * Adjust table columns based on screen size

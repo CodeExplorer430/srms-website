@@ -70,16 +70,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Address is required';
     }
     
-    // Normalize image path 
+    // Normalize image path using our robust path handling functions
     if (!empty($logo)) {
-        // Make sure logo path starts with a slash if it's not empty
-        if (strpos($logo, '/') !== 0) {
-            $logo = '/' . $logo;
-        }
-
-        // Normalize path: remove double slashes and ensure proper directory structure
-        $logo = preg_replace('#/+#', '/', $logo);
-
+        // Use the normalize_image_path function to ensure consistent paths
+        $logo = normalize_image_path($logo);
+        
         // Verify the logo path is within the allowed directories
         $valid_image_path = false;
         $allowed_paths = [
@@ -103,9 +98,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Invalid logo path. Images should be located in one of the allowed directories. Did you mean: "' . $suggested_path . '"?';
         }
          
-        // Verify file exists (if path is valid and not empty)
+        // Verify file exists using our robust file existence check
         if ($valid_image_path) {
-            if (!file_exists_with_alternatives($logo)) {
+            // Use the robust verify_image_exists function
+            if (!verify_image_exists($logo)) {
                 $warnings[] = 'Logo file not found at "' . $logo . '". Please check the path or upload the image first.';
             }
         }
@@ -149,6 +145,14 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'An error occurred while saving the settings';
         }
     }
+}
+
+// Helper function for admin panel to display the correct image URL
+function get_settings_image_url($path) {
+    if (empty($path)) return '';
+    
+    // Use the function from functions.php to get the correct URL
+    return get_correct_image_url(normalize_image_path($path));
 }
 
 $disable_media_library_preview = true;
@@ -221,34 +225,53 @@ ob_start();
                                 <span>No logo selected</span>
                                 <small>Select from media library</small>
                             </div>
-                            <img src="<?php echo !empty($school_info['logo']) ? htmlspecialchars($school_info['logo']) : ''; ?>" 
+                            <?php
+                            // FIXED: Use the get_settings_image_url function to get the correct image URL
+                            $logo_url = !empty($school_info['logo']) ? get_settings_image_url($school_info['logo']) : '';
+                            ?>
+                            <img src="<?php echo htmlspecialchars($logo_url); ?>" 
                                 alt="School Logo" 
                                 id="preview-image" 
                                 style="<?php echo empty($school_info['logo']) ? 'display: none;' : ''; ?>">
                         </div>
-                        <div id="source-indicator" class="image-source-indicator"></div>
+                        <div id="source-indicator" class="image-source-indicator">
+                            <?php if (!empty($school_info['logo'])): ?>
+                            <span><i class="bx bx-link"></i> Media Library</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
                 
                 <?php if (!empty($school_info['logo'])): 
-                    // More comprehensive image verification
-                    $server_root = $_SERVER['DOCUMENT_ROOT'];
-                    $image_full_path = $server_root . $school_info['logo'];
-                    $image_exists = file_exists($image_full_path);
-                    $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($school_info['logo'], '/');
-                    $alt_exists = file_exists($alt_path);
-                    $best_match = function_exists('find_best_matching_image') ? find_best_matching_image($school_info['logo']) : '';
+                    // FIXED: Use our robust functions for image verification
+                    $logo_exists = verify_image_exists($school_info['logo']);
+                    $best_match = '';
+                    if (!$logo_exists && function_exists('find_best_matching_image')) {
+                        $best_match = find_best_matching_image($school_info['logo']);
+                    }
                 ?>
-                    <div class="image-verification <?php echo ($image_exists || $alt_exists) ? 'success' : 'error'; ?>">
-                        <?php if ($image_exists || $alt_exists): ?>
+                    <div class="image-verification <?php echo $logo_exists ? 'success' : 'error'; ?>">
+                        <?php if ($logo_exists): ?>
                             <i class='bx bx-check-circle'></i> Logo file exists at this path
                         <?php elseif ($best_match): ?>
                             <i class='bx bx-check-circle'></i> Similar logo found at: <?php echo htmlspecialchars($best_match); ?>
                         <?php else: ?>
                             <i class='bx bx-x-circle'></i> Logo file not found at this path
                             <div class="path-details">
-                                Tried: <?php echo htmlspecialchars($image_full_path); ?><br>
-                                And: <?php echo htmlspecialchars($alt_path); ?>
+                                <?php
+                                // Get server paths for debugging
+                                $server_root = $_SERVER['DOCUMENT_ROOT'];
+                                $project_folder = '';
+                                if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+                                    $project_folder = $matches[1]; // Should be "srms-website"
+                                }
+                                
+                                $path1 = $server_root . ($project_folder ? DIRECTORY_SEPARATOR . $project_folder : '') . 
+                                        str_replace('/', DIRECTORY_SEPARATOR, normalize_image_path($school_info['logo']));
+                                $path2 = $server_root . str_replace('/', DIRECTORY_SEPARATOR, normalize_image_path($school_info['logo']));
+                                ?>
+                                Tried: <?php echo htmlspecialchars($path1); ?><br>
+                                And: <?php echo htmlspecialchars($path2); ?>
                             </div>
                             <div class="path-suggestion">
                                 <p>The logo should be placed in <code>/assets/images/branding/</code> directory.</p>
@@ -461,17 +484,41 @@ document.addEventListener('DOMContentLoaded', function() {
     const sourceIndicator = document.getElementById('source-indicator');
     const previewContainer = document.getElementById('unified-image-preview');
     
+    // Utility function to get correct image URL
+    function getCorrectImageUrl(path) {
+        if (!path || !path.trim()) return '';
+        
+        // Get project folder from URL
+        const urlParts = window.location.pathname.split('/');
+        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        
+        // Normalize path (ensure it starts with a single slash)
+        let normalizedPath = path;
+        if (!normalizedPath.startsWith('/')) {
+            normalizedPath = '/' + normalizedPath;
+        }
+        normalizedPath = normalizedPath.replace(/\/+/g, '/');
+        
+        // Use the origin + project folder + path for the full URL
+        return window.location.origin + '/' + projectFolder + normalizedPath;
+    }
+    
     // Initialize with current logo path
     function updatePreview(path) {
         if (path && path.trim()) {
+            // Use our URL resolution function
+            const fullImageUrl = getCorrectImageUrl(path);
+            
             // Show image preview
-            previewImage.src = path;
+            previewImage.src = fullImageUrl;
             previewImage.style.display = 'block';
             previewPlaceholder.style.display = 'none';
             
             // Add library mode styling
             previewContainer.classList.add('library-mode');
             sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+            
+            console.log('Updated preview with path:', path, 'Full URL:', fullImageUrl);
         } else {
             // Show placeholder
             previewImage.style.display = 'none';
@@ -521,6 +568,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     const path = selectedItem.getAttribute('data-path');
                     if (path && window.UnifiedImageUploader) {
                         window.UnifiedImageUploader.selectMediaItem(path);
+                        
+                        // Close the modal after selection
+                        mediaModal.style.display = 'none';
+                        document.body.style.overflow = '';
                     }
                 }
             });

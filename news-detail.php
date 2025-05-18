@@ -12,37 +12,47 @@ if ($article_id <= 0) {
 include_once 'includes/config.php';
 include_once 'includes/functions.php';
 
+// Function to ensure image paths are properly formatted for display
 function prepare_image_for_display($image_path) {
     // If path is empty, return a default image
     if (empty($image_path)) {
-        return '/assets/images/news/news-placeholder.jpg';
+        return SITE_URL . '/assets/images/news/news-placeholder.jpg';
     }
     
     // Normalize path format
     $image_path = '/' . ltrim($image_path, '/');
     
-    // Verify the image exists (use the functions already in your code)
+    // Get server root and project folder information
     $server_root = $_SERVER['DOCUMENT_ROOT'];
-    $full_path = $server_root . $image_path;
+    $project_folder = 'srms-website';
+    
+    // Build full path (always with project folder)
+    $full_path = $server_root . DIRECTORY_SEPARATOR . $project_folder . str_replace('/', DIRECTORY_SEPARATOR, $image_path);
+    
+    // Log for debugging
+    error_log("News detail checking image: " . $full_path);
     
     if (file_exists($full_path)) {
-        return $image_path;
+        // Return URL with site prefix
+        return SITE_URL . $image_path;
     }
     
-    // Try alternative paths if the direct path doesn't work
+    // Try alternative paths
     $alt_paths = [
-        str_replace('/assets/images/', '/images/', $image_path),
-        str_replace('/images/', '/assets/images/', $image_path)
+        // Without project folder
+        $server_root . str_replace('/', DIRECTORY_SEPARATOR, $image_path),
+        // With spaces instead of hyphens
+        str_replace('-', ' ', $full_path)
     ];
     
-    foreach ($alt_paths as $alt_path) {
-        if (file_exists($server_root . $alt_path)) {
-            return $alt_path;
+    foreach ($alt_paths as $path) {
+        if (file_exists($path)) {
+            return SITE_URL . $image_path;
         }
     }
     
     // Return default if no valid path is found
-    return '/assets/images/news/news-placeholder.jpg';
+    return SITE_URL . '/assets/images/news/news-placeholder.jpg';
 }
 
 // Fetch article data

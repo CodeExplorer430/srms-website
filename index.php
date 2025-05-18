@@ -15,51 +15,35 @@ $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order AS
 $hero_background = '/assets/images/campus/hero-background.jpg';
 
 /**
- * Get the correct image URL ensuring it points to the srms-website directory
- * 
- * @param string $image_path Image path from database
- * @return string Corrected URL or empty string if not found
+ * UPDATED: Get image URL function that leverages the existing robust functions.php methods
+ * This is aligned with how the admin dashboard handles images
  */
-function get_image_url($image_path) {
+function get_homepage_image_url($image_path) {
     if (empty($image_path)) return '';
     
-    // Normalize path for consistency
-    $path = normalize_image_path($image_path);
+    // Use the consistent normalize_image_path function from functions.php
+    $normalized_path = normalize_image_path($image_path);
     
-    // Extract site folder name from SITE_URL
-    $site_folder = '';
-    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-        $site_folder = $matches[1]; // This should be "srms-website"
+    // Try to verify if the image exists using the robust file verification function
+    $image_exists = verify_image_exists($normalized_path);
+    
+    if ($image_exists) {
+        // Use the consistently working get_correct_image_url function
+        return get_correct_image_url($normalized_path);
     }
     
-    // EXPLICIT PATH: Check if the file exists in the site folder
-    $site_path = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . '/' . $site_folder . $path;
-    $exists_in_site = file_exists($site_path);
-    
-    // FALLBACK PATH: Check if it exists directly in document root
-    $root_path = $_SERVER['DOCUMENT_ROOT'] . $path;
-    $exists_in_root = file_exists($root_path);
-    
-    // Log results for debugging
-    error_log("Image path check: $path");
-    error_log("Site path ($site_path): " . ($exists_in_site ? "EXISTS" : "NOT FOUND"));
-    error_log("Root path ($root_path): " . ($exists_in_root ? "EXISTS" : "NOT FOUND"));
-    
-    // Determine correct URL based on where file was found
-    if ($exists_in_site) {
-        // File is in site folder, use SITE_URL
-        return SITE_URL . $path;
-    } else if ($exists_in_root) {
-        // File is at root, remove site folder from URL
-        return str_replace('/' . $site_folder, '', SITE_URL) . $path;
+    // If image doesn't exist, try to find alternatives
+    $alternative_path = find_best_matching_image($normalized_path);
+    if ($alternative_path) {
+        return get_correct_image_url($alternative_path);
     }
     
-    // Image not found in either location
-    return '';
+    // Last resort - construct URL based on SITE_URL + normalized path
+    return SITE_URL . $normalized_path;
 }
 
-// Debugging function - uncomment to display path information for troubleshooting
-function debug_image_paths() {
+// Optional debug info - comment out when not needed
+function debug_homepage_image_paths() {
     // Extract site folder name
     $site_folder = '';
     if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
@@ -75,46 +59,45 @@ function debug_image_paths() {
     echo '<p>Server: ' . SERVER_TYPE . '</p>';
     echo '<p>DS: ' . DS . '</p>';
     
-    // Test actual path from database
-    $db = db_connect();
-    $sample = $db->fetch_row("SELECT image FROM facilities LIMIT 1");
-    if ($sample) {
-        $test_paths = [
-            $sample['image'],
-            '/assets/images/facilities/library-1746261509.jpg',
-            'assets/images/facilities/gymnasium-1746261509.jpg',
-            '/assets/images/campus/hero-background-1746261656.jpg'
-        ];
+    // Get server paths
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $project_folder = $site_folder;
+    $site_path = $server_root . DIRECTORY_SEPARATOR . $project_folder;
+    
+    echo '<p>Full Project Path: ' . $site_path . '</p>';
+    
+    // Test actual paths to important files
+    $test_paths = [
+        '/assets/images/facilities/library.jpg',
+        '/assets/images/facilities/gymnasium.jpg',
+        '/assets/images/campus/hero-background.jpg'
+    ];
+    
+    echo '<h4>Path Tests:</h4>';
+    foreach ($test_paths as $path) {
+        $norm_path = normalize_image_path($path);
         
-        echo '<h4>Path Tests:</h4>';
-        foreach ($test_paths as $path) {
-            $norm_path = normalize_image_path($path);
-            
-            // Test multiple path variations
-            $standard_path = $_SERVER['DOCUMENT_ROOT'] . $norm_path;
-            $with_site_folder = $_SERVER['DOCUMENT_ROOT'] . '/' . $site_folder . $norm_path;
-            
-            echo "<p>Original: $path<br>";
-            echo "Normalized: $norm_path<br>";
-            echo "Standard Path: $standard_path - Exists: " . (file_exists($standard_path) ? 'Yes' : 'No') . "<br>";
-            echo "With Site Folder: $with_site_folder - Exists: " . (file_exists($with_site_folder) ? 'Yes' : 'No') . "<br>";
-            echo "verify_image_exists: " . (verify_image_exists($norm_path) ? 'Yes' : 'No') . "<br>";
-            echo "Final URL: " . get_image_url($norm_path) . "</p>";
-        }
+        // Test multiple path variations
+        $full_path_with_project = $server_root . DIRECTORY_SEPARATOR . $project_folder . str_replace('/', DIRECTORY_SEPARATOR, $norm_path);
+        
+        echo "<p>Path: $path<br>";
+        echo "Full path: $full_path_with_project<br>";
+        echo "Exists: " . (file_exists($full_path_with_project) ? 'Yes' : 'No') . "<br>";
+        echo "Final URL: " . get_homepage_image_url($path) . "</p>";
     }
     
     echo '</div>';
 }
 
-// Uncomment this line when you need to debug
-debug_image_paths();
+// Uncomment to debug - comment back when not needed
+// debug_homepage_image_paths();
 ?>
 
 <!-- Custom inline style for the hero section background -->
 <style>
     .enr {
         background-image: linear-gradient(rgba(6, 52, 150, 0.658), rgba(6, 52, 150, 0.658)), 
-            url('<?php echo get_correct_image_url($hero_background); ?>');
+            url('<?php echo get_homepage_image_url($hero_background); ?>');
     }
 </style>
 
@@ -148,8 +131,8 @@ debug_image_paths();
         <?php foreach($slideshow_images as $slide): ?>
         <div class="slide">
             <?php 
-            // Get proper image URL
-            $image_url = get_correct_image_url($slide['image']);
+            // Use the improved image URL function
+            $image_url = get_homepage_image_url($slide['image']);
             ?>
             <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($slide['caption']); ?>">
         </div>
@@ -186,12 +169,15 @@ debug_image_paths();
             <?php foreach($facilities as $facility): ?>
                 <li>
                     <?php 
-                    // Get proper image URL
-                    $image_url = get_correct_image_url($facility['image']);
-                    $default_image = SITE_URL . '/assets/images/facilities/' . strtolower($facility['name']) . '.jpg';
+                    // Use the improved image URL function
+                    $image_url = get_homepage_image_url($facility['image']);
+                    
+                    // Fallback to default image if necessary
+                    if (empty($image_url)) {
+                        $image_url = SITE_URL . '/assets/images/facilities/' . strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $facility['name'])) . '.jpg';
+                    }
                     ?>
-                    <img src="<?php echo !empty($image_url) ? $image_url : $default_image; ?>" 
-                         alt="<?php echo htmlspecialchars($facility['name']); ?>">
+                    <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($facility['name']); ?>">
                     <h3><?php echo htmlspecialchars($facility['name']); ?></h3>
                     <p><?php echo htmlspecialchars($facility['description']); ?></p>
                 </li>

@@ -27,6 +27,25 @@ $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order AS
 // Get offer box content
 $offer_box = $db->fetch_all("SELECT * FROM offer_box ORDER BY display_order ASC");
 
+/**
+ * Helper function for displaying images in admin panel
+ * Uses the robust image path functions from functions.php
+ */
+function get_admin_image_url($image_path) {
+    if (empty($image_path)) return '';
+    
+    // Use the normalize_image_path function from functions.php
+    $normalized_path = normalize_image_path($image_path);
+    
+    // Try to get the correct URL using our helper functions
+    if (function_exists('get_correct_image_url')) {
+        return get_correct_image_url($normalized_path);
+    }
+    
+    // Build a URL with SITE_URL as fallback
+    return SITE_URL . $normalized_path;
+}
+
 // Start output buffer for main content
 ob_start();
 ?>
@@ -79,7 +98,8 @@ ob_start();
                                     <?php foreach($slideshow as $slide): ?>
                                         <div class="slide-card" data-id="<?php echo $slide['id']; ?>">
                                             <div class="slide-image">
-                                                <img src="<?php echo $slide['image']; ?>" alt="<?php echo htmlspecialchars($slide['caption']); ?>">
+                                                <!-- FIXED: Use the get_admin_image_url function to properly resolve image path -->
+                                                <img src="<?php echo get_admin_image_url($slide['image']); ?>" alt="<?php echo htmlspecialchars($slide['caption']); ?>">
                                                 <?php if(!$slide['is_active']): ?>
                                                 <div class="inactive-overlay">
                                                     <span>Inactive</span>
@@ -128,7 +148,8 @@ ob_start();
                                     <?php foreach($facilities as $facility): ?>
                                         <div class="facility-card" data-id="<?php echo $facility['id']; ?>">
                                             <div class="facility-image">
-                                                <img src="<?php echo $facility['image']; ?>" alt="<?php echo htmlspecialchars($facility['name']); ?>">
+                                                <!-- FIXED: Use the get_admin_image_url function to properly resolve image path -->
+                                                <img src="<?php echo get_admin_image_url($facility['image']); ?>" alt="<?php echo htmlspecialchars($facility['name']); ?>">
                                             </div>
                                             <div class="facility-info">
                                                 <h4><?php echo htmlspecialchars($facility['name']); ?></h4>
@@ -540,9 +561,15 @@ ob_start();
                             slideOrder.value = data.data.display_order;
                             slideActive.checked = data.data.is_active == 1;
                             
-                            // Update preview
+                            // Update preview - use get_admin_image_url equivalent in JavaScript
                             if (data.data.image) {
-                                slidePreviewImage.src = data.data.image;
+                                // Use the SITE_URL to ensure proper path resolution
+                                const siteUrl = window.location.origin + '/srms-website';
+                                const imagePath = data.data.image.startsWith('/') ? 
+                                                 data.data.image : '/' + data.data.image;
+                                                 
+                                slidePreviewImage.src = data.data.image.includes('http') ? 
+                                                      data.data.image : siteUrl + imagePath;
                                 slidePreviewImage.style.display = 'block';
                                 slidePreviewPlaceholder.style.display = 'none';
                             } else {
@@ -616,9 +643,15 @@ ob_start();
                             facilityDescription.value = data.data.description;
                             facilityOrder.value = data.data.display_order;
                             
-                            // Update preview
+                            // Update preview - use get_admin_image_url equivalent in JavaScript
                             if (data.data.image) {
-                                facilityPreviewImage.src = data.data.image;
+                                // Use the SITE_URL to ensure proper path resolution
+                                const siteUrl = window.location.origin + '/srms-website';
+                                const imagePath = data.data.image.startsWith('/') ? 
+                                                 data.data.image : '/' + data.data.image;
+                                                 
+                                facilityPreviewImage.src = data.data.image.includes('http') ? 
+                                                        data.data.image : siteUrl + imagePath;
                                 facilityPreviewImage.style.display = 'block';
                                 facilityPreviewPlaceholder.style.display = 'none';
                             } else {
@@ -653,6 +686,35 @@ ob_start();
                 }
             }
         });
+        
+        // Improved image preview function for handling paths
+        function updateImagePreview(path, previewImage, previewPlaceholder) {
+            if (path && path.trim()) {
+                // Use the same logic as server-side get_admin_image_url
+                const siteUrl = window.location.origin + '/srms-website';
+                
+                // Normalize path
+                let normalizedPath = path;
+                // Ensure path starts with a slash
+                if (!normalizedPath.startsWith('/')) {
+                    normalizedPath = '/' + normalizedPath;
+                }
+                
+                // Check if the path already contains the full URL
+                if (!path.includes('http')) {
+                    // Add site URL
+                    previewImage.src = siteUrl + normalizedPath;
+                } else {
+                    previewImage.src = path;
+                }
+                
+                previewImage.style.display = 'block';
+                previewPlaceholder.style.display = 'none';
+            } else {
+                previewImage.style.display = 'none';
+                previewPlaceholder.style.display = 'flex';
+            }
+        }
         
         // Image preview functionality for slideshow
         if (slideImage) {
@@ -697,17 +759,6 @@ ob_start();
             if (modal) {
                 modal.style.display = 'none';
                 document.body.style.overflow = '';
-            }
-        }
-        
-        function updateImagePreview(path, previewImage, previewPlaceholder) {
-            if (path && path.trim()) {
-                previewImage.src = path;
-                previewImage.style.display = 'block';
-                previewPlaceholder.style.display = 'none';
-            } else {
-                previewImage.style.display = 'none';
-                previewPlaceholder.style.display = 'flex';
             }
         }
         

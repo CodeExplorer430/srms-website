@@ -73,6 +73,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $name = $db->escape($name);
         $url = $db->escape($url);
         
+        // Check for existing items with the same display order
+        // when creating a new item or changing display order of existing
+        $check_order_query = "SELECT id, name FROM navigation 
+                            WHERE display_order = $display_order 
+                            AND parent_id IS " . ($parent_id === 'NULL' ? "NULL" : "= $parent_id") . "
+                            AND id != $id";
+                            
+        $existing_with_same_order = $db->fetch_row($check_order_query);
+        
+        if ($existing_with_same_order) {
+            // Shift existing items to make room
+            $shift_query = "UPDATE navigation 
+                        SET display_order = display_order + 1 
+                        WHERE display_order >= $display_order 
+                        AND parent_id IS " . ($parent_id === 'NULL' ? "NULL" : "= $parent_id");
+            $db->query($shift_query);
+        }
+    
         // Check for circular references
         if ($id > 0 && $parent_id !== 'NULL') {
             // Make sure we're not setting an item as its own parent or descendant

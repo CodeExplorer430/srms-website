@@ -23,6 +23,33 @@ include_once '../includes/db.php';
 include_once '../includes/functions.php';
 $db = new Database();
 
+/**
+ * Process and save an image path consistently for cross-platform compatibility
+ * 
+ * @param string $image_path Image path to process
+ * @return string Normalized image path for database storage
+ */
+function process_image_path_for_storage($image_path) {
+    if (empty($image_path)) return '';
+    
+    // First, normalize the path using the common function
+    $normalized_path = normalize_image_path($image_path);
+    
+    // Make sure it's properly formatted for storage
+    // Paths should always start with /assets/ to ensure consistency
+    if (strpos($normalized_path, '/assets/') !== 0) {
+        // Try to extract the /assets/ part
+        if (preg_match('#(/assets/.*)#', $normalized_path, $matches)) {
+            $normalized_path = $matches[1];
+        }
+    }
+    
+    // Log the path transformation for debugging
+    error_log("Image path transformation: Original: {$image_path}, Normalized: {$normalized_path}");
+    
+    return $normalized_path;
+}
+
 // Handle AJAX GET requests
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action'])) {
     $response = ['success' => false, 'message' => '', 'data' => null];
@@ -107,13 +134,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         
-        // Properly normalize image path to ensure consistent storage format
-        $image = normalize_image_path($image);
+        // IMPROVED: Process image path consistently before storage
+        $image = process_image_path_for_storage($image);
         
         // Prepare data for database
         $image = $db->escape($image);
         $caption = $db->escape($caption);
         $link = $db->escape($link);
+        
+        // Log the final path for debugging
+        error_log("Slideshow image path to be stored: {$image}");
         
         if ($id > 0) {
             // Update existing slide
@@ -158,15 +188,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         
-        // Normalize image path if provided
+        // IMPROVED: Process image path consistently before storage if image exists
         if (!empty($image)) {
-            $image = normalize_image_path($image);
+            $image = process_image_path_for_storage($image);
         }
         
         // Prepare data for database
         $name = $db->escape($name);
         $image = $db->escape($image);
         $description = $db->escape($description);
+        
+        // Log the final path for debugging
+        error_log("Facility image path to be stored: {$image}");
         
         if ($id > 0) {
             // Update existing facility

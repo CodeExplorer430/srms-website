@@ -240,9 +240,37 @@ ob_start();
                             <?php foreach($recent_news as $article): ?>
                             <li class="news-item">
                                 <div class="news-card">
-                                    <?php if(!empty($article['image']) && file_exists($_SERVER['DOCUMENT_ROOT'] . $article['image'])): ?>
+                                    <?php
+                                    // FIXED: Use the robust image handling functions
+                                    $display_image = false;
+                                    $image_url = '';
+                                    
+                                    if (!empty($article['image'])) {
+                                        // Normalize the path for consistency
+                                        $normalized_path = normalize_image_path($article['image']);
+                                        
+                                        // Verify if image exists using robust cross-platform function
+                                        if (verify_image_exists($normalized_path)) {
+                                            $display_image = true;
+                                            // Get correct URL with project folder consideration
+                                            $image_url = get_correct_image_url($normalized_path);
+                                        } else {
+                                            // Log the issue for debugging
+                                            error_log("Admin dashboard: News image not found: " . $normalized_path);
+                                            
+                                            // Try to use any available image match
+                                            $alternative_path = find_best_matching_image($normalized_path);
+                                            if ($alternative_path) {
+                                                $display_image = true;
+                                                $image_url = get_correct_image_url($alternative_path);
+                                                error_log("Admin dashboard: Using alternative image: " . $alternative_path);
+                                            }
+                                        }
+                                    }
+                                    ?>
+                                    <?php if($display_image): ?>
                                     <div class="news-image">
-                                        <img src="<?php echo $article['image']; ?>" alt="<?php echo htmlspecialchars($article['title']); ?>">
+                                        <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($article['title']); ?>">
                                     </div>
                                     <?php endif; ?>
                                     <div class="news-content">
@@ -304,9 +332,13 @@ ob_start();
                     <?php else: ?>
                     <div class="media-grid">
                         <?php foreach ($recent_media as $media): ?>
+                        <?php 
+                            // FIXED: Use the correct image URL function
+                            $media_url = get_correct_image_url($media['path']);
+                        ?>
                         <div class="media-item">
                             <div class="media-thumbnail">
-                                <img src="<?php echo $media['path']; ?>" alt="<?php echo htmlspecialchars($media['name']); ?>">
+                                <img src="<?php echo $media_url; ?>" alt="<?php echo htmlspecialchars($media['name']); ?>">
                                 <span class="media-badge badge-<?php echo $media['type']; ?>"><?php echo ucfirst($media['type']); ?></span>
                             </div>
                         </div>

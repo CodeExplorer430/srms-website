@@ -2,22 +2,34 @@
 $page_title = 'Senior High School';
 $page_description = 'Explore the Senior High School program at St. Raphaela Mary School, featuring ABM, HUMSS, and GAS academic tracks.';
 
+// Simple path resolution for subdirectory
 $root_path = dirname(__DIR__);
+
+// Include required files
 require_once $root_path . '/includes/config.php';
+require_once $root_path . '/includes/db.php';
 require_once $root_path . '/includes/functions.php';
+
+// Include header after loading all dependencies
 include $root_path . '/includes/header.php';
 
-// Fetch senior high program details
+// Connect to database
 $db = db_connect();
 
-// Get the senior high level ID first
+// Get the senior high level ID
 $senior_high_level = $db->fetch_row("SELECT id FROM academic_levels WHERE slug = 'senior-high' LIMIT 1");
+if (!$senior_high_level) {
+    echo "<p>Error: Senior High School information not found.</p>";
+    include $root_path . '/includes/footer.php';
+    exit;
+}
+
 $level_id = $senior_high_level['id'];
 
-// Get the program details
+// Get program details
 $program = $db->fetch_row("SELECT * FROM academic_programs WHERE level_id = $level_id LIMIT 1");
 
-// Get the academic tracks
+// Get academic tracks
 $academic_tracks = $db->fetch_all("SELECT * FROM academic_tracks WHERE program_id = {$program['id']} ORDER BY display_order ASC");
 ?>
 
@@ -62,4 +74,4 @@ $academic_tracks = $db->fetch_all("SELECT * FROM academic_tracks WHERE program_i
     </div>
 </main>
 
-<?php include '../includes/footer.php'; ?>
+<?php include $root_path . '/includes/footer.php'; ?>

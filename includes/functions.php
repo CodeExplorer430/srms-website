@@ -622,6 +622,90 @@ function get_fallback_image($fallback_path = '', $default_type = '', $name = '')
 }
 
 /**
+ * Enhanced public image path handler
+ * This function ensures consistent image paths between admin and public pages
+ * 
+ * @param string $image_path The original image path from database
+ * @return string The fully qualified URL to use for the image
+ */
+function get_public_image_url($image_path) {
+    if (empty($image_path)) return '';
+    
+    // Normalize the path for consistency
+    $normalized_path = normalize_image_path($image_path);
+    
+    // Get project folder from SITE_URL (should be "srms-website")
+    $project_folder = '';
+    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1];
+    }
+    
+    // 1. First check - the direct full path including project folder
+    $server_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+    $full_path = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
+                str_replace('/', DIRECTORY_SEPARATOR, $normalized_path);
+                
+    if (file_exists($full_path)) {
+        // Found the file at the full path with project folder
+        return SITE_URL . $normalized_path;
+    }
+    
+    // 2. Second check - try without the project folder
+    $alt_path = $server_root . str_replace('/', DIRECTORY_SEPARATOR, $normalized_path);
+    if (file_exists($alt_path)) {
+        // Found the file directly at document root
+        return str_replace('/' . $project_folder, '', SITE_URL) . $normalized_path;
+    }
+    
+    // 3. Third check - try with just the filename in various image directories
+    $filename = basename($normalized_path);
+    $media_directories = [
+        '/assets/images/news',
+        '/assets/images/events',
+        '/assets/images/promotional',
+        '/assets/images/facilities',
+        '/assets/images/campus',
+        '/assets/images/branding'
+    ];
+    
+    foreach ($media_directories as $dir) {
+        $test_path = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
+                    str_replace('/', DIRECTORY_SEPARATOR, $dir) . 
+                    DIRECTORY_SEPARATOR . $filename;
+                    
+        if (file_exists($test_path)) {
+            return SITE_URL . $dir . '/' . $filename;
+        }
+    }
+    
+    // If we still can't find the file, try the parent directory
+    $parent_dir = dirname($normalized_path);
+    $files = glob($server_root . DIRECTORY_SEPARATOR . $project_folder . 
+                 str_replace('/', DIRECTORY_SEPARATOR, $parent_dir) . 
+                 DIRECTORY_SEPARATOR . '*.*');
+                 
+    if (!empty($files)) {
+        // Look for any files with similar name patterns
+        $base_name = pathinfo($filename, PATHINFO_FILENAME);
+        $base_pattern = preg_replace('/[0-9\-_]+/', '', $base_name);
+        
+        foreach ($files as $file) {
+            $file_name = basename($file);
+            $file_base = pathinfo($file_name, PATHINFO_FILENAME);
+            
+            // Check if file base name contains our pattern
+            if (stripos($file_base, $base_pattern) !== false) {
+                return SITE_URL . $parent_dir . '/' . $file_name;
+            }
+        }
+    }
+    
+    // Last resort - return the site URL + normalized path, even if it doesn't exist
+    // This might still work if the file is actually there but file_exists() fails
+    return SITE_URL . $normalized_path;
+}
+
+/**
  * DEBUG FUNCTIONS
  */
 
