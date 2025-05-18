@@ -1,4 +1,17 @@
 <?php
+/**
+ * Common Functions
+ * Utility and CMS functions for the St. Raphaela Mary School website
+ */
+
+// Define constants for environment detection
+if (!defined('IS_WINDOWS')) {
+    define('IS_WINDOWS', (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN'));
+}
+if (!defined('DS')) {
+    define('DS', DIRECTORY_SEPARATOR);
+}
+
 // Initialize database connection
 function db_connect() {
     static $db = null;
@@ -9,6 +22,10 @@ function db_connect() {
     }
     return $db;
 }
+
+/**
+ * SCHOOL INFORMATION FUNCTIONS
+ */
 
 // Get school information
 function get_school_info() {
@@ -30,6 +47,10 @@ function get_school_info() {
     
     return $school_info;
 }
+
+/**
+ * NAVIGATION FUNCTIONS
+ */
 
 // Get navigation menu items
 function get_navigation_menu() {
@@ -80,6 +101,10 @@ function get_active_page() {
     return str_replace('.php', '', $last_segment);
 }
 
+/**
+ * DATE AND FORMATTING FUNCTIONS
+ */
+
 // Format date for display
 function format_date($db_date, $format = 'F j, Y') {
     $timestamp = strtotime($db_date);
@@ -88,6 +113,10 @@ function format_date($db_date, $format = 'F j, Y') {
 
 // Helper function for formatting requirements as lists
 function format_requirements_list($requirements) {
+    if (empty($requirements)) {
+        return '';
+    }
+    
     $output = '<ol>';
     $lines = explode("\n", $requirements);
     $in_sublist = false;
@@ -122,6 +151,359 @@ function format_requirements_list($requirements) {
     $output .= '</ol>';
     return $output;
 }
+
+/**
+ * PAGE CONTENT MANAGEMENT FUNCTIONS
+ */
+
+/**
+ * Get a page content from the database
+ * 
+ * @param string $page_key - The unique key for the page
+ * @return array|null - The page data or null if not found
+ */
+function get_page_content($page_key) {
+    $db = db_connect();
+    
+    $page_key = $db->escape($page_key);
+    
+    // First try with the page_content table
+    $page = $db->fetch_row("SELECT * FROM page_content WHERE page_key = '$page_key'");
+    
+    // If page exists in page_content, also get its sections
+    if ($page) {
+        $page_id = $page['id'];
+        $sections = $db->fetch_all("SELECT * FROM page_sections WHERE page_id = $page_id ORDER BY display_order ASC");
+        $page['sections'] = $sections;
+        
+        // Organize sections by key for easier access
+        $page['sections_by_key'] = [];
+        foreach ($sections as $section) {
+            $page['sections_by_key'][$section['section_key']] = $section;
+        }
+        return $page;
+    }
+    
+    // Fallback to legacy pages table if it exists
+    try {
+        $legacy_page = $db->fetch_row("SELECT * FROM pages WHERE slug = '$page_key'");
+        if ($legacy_page) {
+            // Convert legacy page to new format
+            $legacy_page['page_key'] = $legacy_page['slug'];
+            $legacy_page['sections'] = [];
+            $legacy_page['sections_by_key'] = [];
+            
+            // Create a "content" section from the page content
+            if (!empty($legacy_page['content'])) {
+                $main_section = [
+                    'section_key' => 'content',
+                    'title' => $legacy_page['title'],
+                    'content' => $legacy_page['content'],
+                    'display_order' => 0
+                ];
+                $legacy_page['sections'][] = $main_section;
+                $legacy_page['sections_by_key']['content'] = $main_section;
+            }
+            
+            return $legacy_page;
+        }
+    } catch (Exception $e) {
+        // Table doesn't exist or query failed - ignore and return null
+    }
+    
+    return null;
+}
+
+/**
+ * Display a section of a page
+ * 
+ * @param array $page - The page data
+ * @param string $section_key - The section key to display
+ * @param boolean $show_title - Whether to show the section title
+ * @param string $default_content - Default content if section not found
+ * @return void
+ */
+function display_page_section($page, $section_key, $show_title = true, $default_content = '') {
+    if (!isset($page['sections_by_key'][$section_key])) {
+        echo $default_content;
+        return;
+    }
+    
+    $section = $page['sections_by_key'][$section_key];
+    
+    if ($show_title && !empty($section['title'])) {
+        echo '<h3>' . htmlspecialchars($section['title']) . '</h3>';
+    }
+    
+    echo nl2br(htmlspecialchars($section['content']));
+}
+
+/**
+ * ACADEMIC PROGRAMS FUNCTIONS
+ */
+
+/**
+ * Get all academic levels
+ * 
+ * @return array - Array of academic levels
+ */
+function get_academic_levels() {
+    $db = db_connect();
+    
+    return $db->fetch_all("SELECT * FROM academic_levels ORDER BY display_order ASC");
+}
+
+/**
+ * Get programs for a specific academic level
+ * 
+ * @param int $level_id - The ID of the academic level
+ * @return array - Array of programs
+ */
+function get_programs_by_level($level_id) {
+    $db = db_connect();
+    
+    $level_id = (int)$level_id;
+    return $db->fetch_all("SELECT * FROM academic_programs WHERE level_id = $level_id ORDER BY display_order ASC");
+}
+
+/**
+ * Get tracks for a specific program
+ * 
+ * @param int $program_id - The ID of the academic program
+ * @return array - Array of tracks
+ */
+function get_tracks_by_program($program_id) {
+    $db = db_connect();
+    
+    $program_id = (int)$program_id;
+    return $db->fetch_all("SELECT * FROM academic_tracks WHERE program_id = $program_id ORDER BY display_order ASC");
+}
+
+/**
+ * Get a specific academic level by slug
+ * 
+ * @param string $slug - The slug of the academic level
+ * @return array|null - The academic level data or null if not found
+ */
+function get_academic_level_by_slug($slug) {
+    $db = db_connect();
+    
+    $slug = $db->escape($slug);
+    $level = $db->fetch_row("SELECT * FROM academic_levels WHERE slug = '$slug'");
+    
+    if ($level) {
+        // Get programs for this level
+        $level_id = $level['id'];
+        $programs = $db->fetch_all("SELECT * FROM academic_programs WHERE level_id = $level_id ORDER BY display_order ASC");
+        $level['programs'] = $programs;
+        
+        // Get tracks for each program
+        foreach ($level['programs'] as $key => $program) {
+            $program_id = $program['id'];
+            $tracks = $db->fetch_all("SELECT * FROM academic_tracks WHERE program_id = $program_id ORDER BY display_order ASC");
+            $level['programs'][$key]['tracks'] = $tracks;
+        }
+    }
+    
+    return $level;
+}
+
+/**
+ * FACULTY MANAGEMENT FUNCTIONS
+ */
+
+/**
+ * Get all faculty categories
+ * 
+ * @return array - Array of faculty categories with members
+ */
+function get_faculty_categories() {
+    $db = db_connect();
+    
+    $categories = $db->fetch_all("SELECT * FROM faculty_categories ORDER BY display_order ASC");
+    
+    // For each category, get its members
+    foreach ($categories as $key => $category) {
+        $category_id = $category['id'];
+        $members = $db->fetch_all("SELECT * FROM faculty WHERE category_id = $category_id ORDER BY display_order ASC");
+        $categories[$key]['members'] = $members;
+    }
+    
+    return $categories;
+}
+
+/**
+ * Get faculty members for a specific category
+ * 
+ * @param int $category_id - The category ID
+ * @return array - Array of faculty members
+ */
+function get_faculty_by_category($category_id) {
+    $db = db_connect();
+    
+    $category_id = (int)$category_id;
+    return $db->fetch_all("SELECT * FROM faculty WHERE category_id = $category_id ORDER BY display_order ASC");
+}
+
+/**
+ * ADMISSIONS CONTENT FUNCTIONS
+ */
+
+/**
+ * Get admission policies
+ * 
+ * @return array - Array of admission policies
+ */
+function get_admission_policies() {
+    $db = db_connect();
+    
+    // Try first in the new table structure
+    $policies = $db->fetch_row("SELECT * FROM admission_policies ORDER BY display_order ASC LIMIT 1");
+    
+    if ($policies) {
+        // Parse the content into an array of policies
+        $content = $policies['content'];
+        $policies_array = [];
+        if (!empty($content)) {
+            $lines = explode("\n", $content);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (!empty($line)) {
+                    $policies_array[] = $line;
+                }
+            }
+        }
+        
+        return [
+            'title' => $policies['title'] ?? 'Admission Policies',
+            'policies' => $policies_array
+        ];
+    }
+    
+    // Fallback to default
+    return [
+        'title' => 'Admission Policies',
+        'policies' => ['No admission policies have been defined yet.']
+    ];
+}
+
+/**
+ * Get student types with requirements
+ * 
+ * @return array - Array of student types
+ */
+function get_student_types() {
+    $db = db_connect();
+    
+    return $db->fetch_all("SELECT * FROM student_types ORDER BY display_order ASC");
+}
+
+/**
+ * Get age requirements
+ * 
+ * @return array - Array of age requirements
+ */
+function get_age_requirements() {
+    $db = db_connect();
+    
+    return $db->fetch_all("SELECT * FROM age_requirements ORDER BY display_order ASC");
+}
+
+/**
+ * Get enrollment procedures
+ * 
+ * @return array - Array of enrollment procedures
+ */
+function get_enrollment_procedures() {
+    $db = db_connect();
+    
+    return $db->fetch_all("SELECT * FROM enrollment_procedures ORDER BY display_order ASC");
+}
+
+/**
+ * Get non-readmission grounds
+ * 
+ * @return array - Array of non-readmission grounds
+ */
+function get_non_readmission_grounds() {
+    $db = db_connect();
+    
+    return $db->fetch_all("SELECT * FROM non_readmission_grounds ORDER BY display_order ASC");
+}
+
+/**
+ * HOMEPAGE ELEMENTS FUNCTIONS
+ */
+
+/**
+ * Get slideshow images
+ * 
+ * @param boolean $active_only - Whether to get only active slides
+ * @return array - Array of slideshow images
+ */
+function get_slideshow($active_only = true) {
+    $db = db_connect();
+    
+    $where_clause = $active_only ? "WHERE is_active = 1" : "";
+    return $db->fetch_all("SELECT * FROM slideshow $where_clause ORDER BY display_order ASC");
+}
+
+/**
+ * Get facilities
+ * 
+ * @return array - Array of facilities
+ */
+function get_facilities() {
+    $db = db_connect();
+    
+    return $db->fetch_all("SELECT * FROM facilities ORDER BY display_order ASC");
+}
+
+/**
+ * Get offer box content
+ * 
+ * @return array - Array of offer box items
+ */
+function get_offer_box() {
+    $db = db_connect();
+    
+    try {
+        return $db->fetch_all("SELECT * FROM offer_box ORDER BY display_order ASC");
+    } catch (Exception $e) {
+        // Table might not exist yet
+        return [];
+    }
+}
+
+/**
+ * UTILITIES FOR DATABASE OPERATIONS
+ */
+
+/**
+ * Safe query execution with error handling
+ * 
+ * @param string $sql The SQL query to execute
+ * @param array $fallback_data Data to return in case of failure
+ * @return mixed Query result or fallback data
+ */
+function safe_query($sql, $fallback_data = []) {
+    try {
+        $db = db_connect();
+        $result = $db->query($sql);
+        if ($result === false) {
+            error_log("Query failed: $sql");
+            return $fallback_data;
+        }
+        return $result;
+    } catch (Exception $e) {
+        error_log("Database error: " . $e->getMessage());
+        return $fallback_data;
+    }
+}
+
+/**
+ * IMAGE HANDLING FUNCTIONS
+ */
 
 /**
  * Get image path with fallback to placeholder
@@ -162,28 +544,6 @@ function get_image_path($image_path, $type = 'general', $gender = 'neutral') {
     
     // Otherwise, return the image path as is
     return $image_path;
-}
-
-/**
- * Safe query execution with error handling
- * 
- * @param string $sql The SQL query to execute
- * @param array $fallback_data Data to return in case of failure
- * @return mixed Query result or fallback data
- */
-function safe_query($sql, $fallback_data = []) {
-    try {
-        $db = db_connect();
-        $result = $db->query($sql);
-        if ($result === false) {
-            error_log("Query failed: $sql");
-            return $fallback_data;
-        }
-        return $result;
-    } catch (Exception $e) {
-        error_log("Database error: " . $e->getMessage());
-        return $fallback_data;
-    }
 }
 
 /**
@@ -262,6 +622,10 @@ function get_fallback_image($fallback_path = '', $default_type = '', $name = '')
 }
 
 /**
+ * DEBUG FUNCTIONS
+ */
+
+/**
  * Debug image paths and existence
  * Used to troubleshoot image loading issues
  */
@@ -283,6 +647,10 @@ function debug_image_path($image_path) {
     
     return $debug_info;
 }
+
+/**
+ * PATH MANIPULATION FUNCTIONS
+ */
 
 /**
  * Standardize image path formatting for consistent handling
@@ -340,11 +708,6 @@ function image_exists($image_path) {
  * Check if file exists, allowing for some flexibility in path formats
  * and case-sensitive filesystems.
  *
- * Tries the following:
- * 1. Direct path
- * 2. With and without leading slash
- * 3. Different case variations (useful on case-sensitive filesystems)
- *
  * @param string $image_path Path to check
  * @return bool True if file exists
  */
@@ -397,7 +760,6 @@ function normalize_image_path($path) {
     return preg_replace('#/+#', '/', $path);
 }
 
-
 /**
  * Enhanced file existence check for cross-platform compatibility
  */
@@ -414,12 +776,8 @@ function verify_image_exists($image_path) {
         rtrim($server_root, '/\\') . $image_path
     ];
     
-    // Log paths for debugging
-    error_log("Checking image existence in paths: " . implode(', ', $paths_to_check));
-    
     foreach ($paths_to_check as $path) {
         if (file_exists($path)) {
-            error_log("Image found at: {$path}");
             return true;
         }
     }
@@ -432,16 +790,66 @@ function verify_image_exists($image_path) {
         $files = scandir($dir);
         foreach ($files as $file) {
             if (strcasecmp($file, $filename) === 0) {
-                error_log("Image found with case-insensitive match: {$dir}/{$file}");
                 return true;
             }
         }
     }
     
-    // If we get here, the file doesn't exist in any of the tried paths
-    error_log("Image not found: {$image_path}");
     return false;
 }
+
+/**
+ * Find best matching image in a directory
+ * Helps resolve issues when filenames contain unique IDs
+ * 
+ * @param string $image_path Original image path
+ * @return string|bool Actual file path if found, false otherwise
+ */
+function find_best_matching_image($image_path) {
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $dir_path = dirname($server_root . $image_path);
+    $base_filename = pathinfo(basename($image_path), PATHINFO_FILENAME);
+    $extension = pathinfo(basename($image_path), PATHINFO_EXTENSION);
+    
+    // If directory doesn't exist
+    if (!is_dir($dir_path)) {
+        return false;
+    }
+    
+    // Get all files in the directory
+    $files = scandir($dir_path);
+    if (!$files) {
+        return false;
+    }
+    
+    // First check for exact match
+    if (in_array(basename($image_path), $files)) {
+        return $image_path;
+    }
+    
+    // Look for pattern match with exact base name (ignoring unique suffix)
+    foreach ($files as $file) {
+        $file_base = pathinfo($file, PATHINFO_FILENAME);
+        if (strpos($file_base, $base_filename) === 0 && 
+            pathinfo($file, PATHINFO_EXTENSION) === $extension) {
+            return dirname($image_path) . '/' . $file;
+        }
+    }
+    
+    // Look for any file with similar pattern (case insensitive)
+    foreach ($files as $file) {
+        if (stripos($file, $base_filename) !== false && 
+            strtolower(pathinfo($file, PATHINFO_EXTENSION)) === strtolower($extension)) {
+            return dirname($image_path) . '/' . $file;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * DIRECTORY & FILE OPERATIONS
+ */
 
 /**
  * Cross-platform directory creation function
@@ -457,16 +865,6 @@ function create_directory($dir, $recursive = true) {
         if (!mkdir($dir, $permissions, $recursive)) {
             error_log("Failed to create directory: {$dir}");
             return false;
-        }
-        
-        // On Linux, we might need to set group permissions separately
-        if (!IS_WINDOWS) {
-            // Get the default Apache group
-            $group = posix_getgrgid(posix_getgid())['name'] ?? 'www-data';
-            
-            // Try to set group permissions (don't fail if this doesn't work)
-            @chgrp($dir, $group);
-            @chmod($dir, 0775); // rwxrwxr-x
         }
         
         return true;
@@ -531,10 +929,6 @@ function upload_image($file, $category = 'news') {
     $relative_path = '/assets/images/' . $category . '/' . $unique_name;
     $relative_path = str_replace('\\', '/', $relative_path);
     
-    // Log paths for debugging
-    error_log("Upload target path: {$target_path}");
-    error_log("Upload relative path: {$relative_path}");
-    
     // Upload file
     if (move_uploaded_file($file['tmp_name'], $target_path)) {
         // Fix permissions
@@ -546,7 +940,6 @@ function upload_image($file, $category = 'news') {
             return false;
         }
         
-        error_log("File uploaded successfully to {$target_path}");
         return $relative_path;
     } else {
         $error = error_get_last();
@@ -555,63 +948,8 @@ function upload_image($file, $category = 'news') {
     }
 }
 
-
 /**
- * Find best matching image in a directory
- * Helps resolve issues when filenames contain unique IDs
- * 
- * @param string $image_path Original image path
- * @return string|bool Actual file path if found, false otherwise
- */
-function find_best_matching_image($image_path) {
-    $server_root = $_SERVER['DOCUMENT_ROOT'];
-    $dir_path = dirname($server_root . $image_path);
-    $base_filename = pathinfo(basename($image_path), PATHINFO_FILENAME);
-    $extension = pathinfo(basename($image_path), PATHINFO_EXTENSION);
-    
-    // If directory doesn't exist
-    if (!is_dir($dir_path)) {
-        error_log("Directory not found: " . $dir_path);
-        return false;
-    }
-    
-    // Get all files in the directory
-    $files = scandir($dir_path);
-    if (!$files) {
-        error_log("Failed to scan directory: " . $dir_path);
-        return false;
-    }
-    
-    // First check for exact match
-    if (in_array(basename($image_path), $files)) {
-        return $image_path;
-    }
-    
-    // Look for pattern match with exact base name (ignoring unique suffix)
-    foreach ($files as $file) {
-        $file_base = pathinfo($file, PATHINFO_FILENAME);
-        if (strpos($file_base, $base_filename) === 0 && 
-            pathinfo($file, PATHINFO_EXTENSION) === $extension) {
-            return dirname($image_path) . '/' . $file;
-        }
-    }
-    
-    // Look for any file with similar pattern (case insensitive)
-    foreach ($files as $file) {
-        if (stripos($file, $base_filename) !== false && 
-            strtolower(pathinfo($file, PATHINFO_EXTENSION)) === strtolower($extension)) {
-            return dirname($image_path) . '/' . $file;
-        }
-    }
-    
-    error_log("No matching image found for: " . $image_path);
-    return false;
-}
-
-
-/**
- * Cross-platform file handling utilities
- * Ensures consistent behavior across Windows (WAMP/XAMPP) and Linux (LAMP/XAMPP) environments
+ * ENVIRONMENT DETECTION
  */
 
 /**
@@ -653,6 +991,10 @@ function detect_environment() {
 function get_directory_separator() {
     return DIRECTORY_SEPARATOR;
 }
+
+/**
+ * FILE PATH UTILITIES
+ */
 
 /**
  * Create a directory with proper permissions based on environment

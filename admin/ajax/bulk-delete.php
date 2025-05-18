@@ -48,7 +48,8 @@ $media_directories = [
     '/assets/images/events',
     '/assets/images/promotional',
     '/assets/images/facilities',
-    '/assets/images/campus'
+    '/assets/images/campus',
+    '/assets/images/branding' // Added branding directory
 ];
 
 error_log('Bulk delete request received: ' . date('Y-m-d H:i:s'));

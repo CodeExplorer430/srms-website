@@ -1,19 +1,26 @@
 <?php
+/**
+ * School Settings Page
+ */
+
+// Start session and include necessary files
 session_start();
 
-// Check if user is logged in
-if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: ../admin-login.php');
+// Check login status
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    header('Location: ../admin/login.php');
     exit;
 }
 
-// Include database connection
+// Include database connection and functions
 include_once '../includes/config.php';
 include_once '../includes/db.php';
+include_once '../includes/functions.php'; // Make sure to include functions.php
 $db = new Database();
 
 // Initialize variables
 $errors = [];
+$warnings = [];
 $success = false;
 
 // Get school information
@@ -63,10 +70,52 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Address is required';
     }
     
+    // Normalize image path 
+    if (!empty($logo)) {
+        // Make sure logo path starts with a slash if it's not empty
+        if (strpos($logo, '/') !== 0) {
+            $logo = '/' . $logo;
+        }
+
+        // Normalize path: remove double slashes and ensure proper directory structure
+        $logo = preg_replace('#/+#', '/', $logo);
+
+        // Verify the logo path is within the allowed directories
+        $valid_image_path = false;
+        $allowed_paths = [
+            '/assets/images/branding/', 
+            '/assets/images/promotional/',
+            '/assets/images/',
+            '/images/'  // For backward compatibility with old paths
+        ];
+         
+        foreach ($allowed_paths as $allowed_path) {
+            if (strpos($logo, $allowed_path) === 0) {
+                $valid_image_path = true;
+                break;
+            }
+        }
+         
+        // If path is invalid but not empty, provide more guidance
+        if (!$valid_image_path) {
+            // Suggest correction to proper path
+            $suggested_path = '/assets/images/branding/' . basename($logo);
+            $errors[] = 'Invalid logo path. Images should be located in one of the allowed directories. Did you mean: "' . $suggested_path . '"?';
+        }
+         
+        // Verify file exists (if path is valid and not empty)
+        if ($valid_image_path) {
+            if (!file_exists_with_alternatives($logo)) {
+                $warnings[] = 'Logo file not found at "' . $logo . '". Please check the path or upload the image first.';
+            }
+        }
+    }
+
+    $logo = $db->escape($logo);
+    
     // Process if no errors
     if(empty($errors)) {
         $name = $db->escape($name);
-        $logo = $db->escape($logo);
         $mission = $db->escape($mission);
         $vision = $db->escape($vision);
         $philosophy = $db->escape($philosophy);
@@ -101,287 +150,403 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+$disable_media_library_preview = true;
+
+// Start output buffer for main content
+ob_start();
 ?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>School Settings | Admin Dashboard</title>
-    <link rel="stylesheet" href="../assets/css/styles.css">
-    <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <style>
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f3f3f3;
-            margin: 0;
-            padding: 0;
-        }
-        .admin-container {
-            display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 250px;
-            background-color: #003366;
-            color: #fff;
-            padding: 20px 0;
-        }
-        .sidebar .logo {
-            text-align: center;
-            padding: 10px 0 20px;
-        }
-        .sidebar .logo img {
-            width: 80px;
-            border-radius: 50%;
-        }
-        .sidebar .menu {
-            margin-top: 20px;
-        }
-        .sidebar .menu-item {
-            padding: 10px 20px;
-            border-left: 4px solid transparent;
-        }
-        .sidebar .menu-item:hover, .sidebar .menu-item.active {
-            background-color: rgba(255,255,255,0.1);
-            border-left-color: #3C91E6;
-        }
-        .sidebar .menu-item a {
-            color: #fff;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-        }
-        .sidebar .menu-item i {
-            margin-right: 10px;
-            font-size: 20px;
-        }
-        .main-content {
-            flex: 1;
-            padding: 20px;
-        }
-        .top-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 20px;
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-        }
-        .user-info .name {
-            margin-right: 15px;
-        }
-        .logout-btn {
-            background-color: transparent;
-            color: #e74c3c;
-            border: 1px solid #e74c3c;
-            padding: 5px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.3s;
-            text-decoration: none;
-        }
-        .logout-btn:hover {
-            background-color: #e74c3c;
-            color: white;
-        }
-        
-        /* Settings form styles */
-        .settings-container {
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            padding: 20px;
-        }
-        .form-section {
-            margin-bottom: 30px;
-        }
-        .form-section h3 {
-            border-bottom: 1px solid #ddd;
-            padding-bottom: 10px;
-            margin-top: 0;
-        }
-        .form-row {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 15px;
-        }
-        .form-group {
-            flex: 1;
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        .form-group input[type="text"],
-        .form-group input[type="email"],
-        .form-group input[type="tel"],
-        .form-group textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: 'Poppins', sans-serif;
-        }
-        .form-group textarea {
-            height: 120px;
-            resize: vertical;
-        }
-        .save-btn {
-            background-color: #3C91E6;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 500;
-        }
-        .success-message {
-            background-color: #d4edda;
-            color: #155724;
-            padding: 10px 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-        .error-message {
-            background-color: #f8d7da;
-            color: #721c24;
-            padding: 10px 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="admin-container">
-        <div class="sidebar">
-            <div class="logo">
-                <img src="../assets/images/branding/logo-primary.png" alt="St. Raphaela Mary School Logo">
-                <h3>SRMS Admin</h3>
-            </div>
-            
-            <div class="menu">
-                <div class="menu-item">
-                    <a href="index.php">
-                        <i class='bx bxs-dashboard'></i>
-                        <span>Dashboard</span>
-                    </a>
-                </div>
-                <div class="menu-item">
-                    <a href="news-manage.php">
-                        <i class='bx bxs-news'></i>
-                        <span>News</span>
-                    </a>
-                </div>
-                <div class="menu-item">
-                    <a href="contact-submissions.php">
-                        <i class='bx bxs-message-detail'></i>
-                        <span>Contact Submissions</span>
-                    </a>
-                </div>
-                <div class="menu-item">
-                    <a href="users.php">
-                        <i class='bx bxs-user'></i>
-                        <span>Users</span>
-                    </a>
-                </div>
-                <div class="menu-item active">
-                    <a href="settings.php">
-                        <i class='bx bxs-cog'></i>
-                        <span>Settings</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-        
-        <div class="main-content">
-            <div class="top-bar">
-                <h2>School Settings</h2>
-                <div class="user-info">
-                    <div class="name">Welcome, <?php echo $_SESSION['admin_username']; ?></div>
-                    <a href="logout.php" class="logout-btn">Logout</a>
-                </div>
-            </div>
-            
-            <?php if($success): ?>
-                <div class="success-message">Settings have been saved successfully.</div>
-            <?php endif; ?>
-            
-            <?php if(!empty($errors)): ?>
-                <div class="error-message">
-                    <ul>
-                        <?php foreach($errors as $error): ?>
-                            <li><?php echo $error; ?></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-            <?php endif; ?>
-            
-            <div class="settings-container">
-                <form action="settings.php" method="post">
-                    <div class="form-section">
-                        <h3>Basic Information</h3>
-                        <div class="form-group">
-                            <label for="name">School Name</label>
-                            <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($school_info['name']); ?>" required>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="logo">Logo Path</label>
-                            <input type="text" id="logo" name="logo" value="<?php echo htmlspecialchars($school_info['logo']); ?>">
-                            <small style="color:#666;">Relative path to logo file (e.g., /assets/images/logo.png)</small>
-                        </div>
-                    </div>
-                    
-                    <div class="form-section">
-                        <h3>Contact Information</h3>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="email">Email</label>
-                                <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($school_info['email']); ?>" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="phone">Phone</label>
-                                <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($school_info['phone']); ?>" required>
-                            </div>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="address">Address</label>
-                            <textarea id="address" name="address" required><?php echo htmlspecialchars($school_info['address']); ?></textarea>
-                        </div>
-                    </div>
-                    
-                    <div class="form-section">
-                        <h3>School Philosophy</h3>
-                        <div class="form-group">
-                            <label for="mission">Mission</label>
-                            <textarea id="mission" name="mission"><?php echo htmlspecialchars($school_info['mission']); ?></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="vision">Vision</label>
-                            <textarea id="vision" name="vision"><?php echo htmlspecialchars($school_info['vision']); ?></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label for="philosophy">Philosophy</label>
-                            <textarea id="philosophy" name="philosophy"><?php echo htmlspecialchars($school_info['philosophy']); ?></textarea>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="save-btn">Save Settings</button>
-                </form>
-            </div>
+
+<?php if($success): ?>
+    <div class="message message-success">
+        <i class='bx bx-check-circle'></i>
+        <span>Settings have been saved successfully.</span>
+    </div>
+<?php endif; ?>
+
+<?php if(!empty($errors)): ?>
+    <div class="message message-error">
+        <i class='bx bx-error-circle'></i>
+        <div>
+            <strong>Please correct the following errors:</strong>
+            <ul class="mt-2 mb-0">
+                <?php foreach($errors as $error): ?>
+                    <li><?php echo $error; ?></li>
+                <?php endforeach; ?>
+            </ul>
         </div>
     </div>
-</body>
-</html>
+<?php endif; ?>
+
+<?php if (!empty($warnings)): ?>
+    <div class="message message-warning">
+        <i class='bx bx-info-circle'></i>
+        <div>
+            <ul>
+                <?php foreach ($warnings as $warning): ?>
+                <li><?php echo $warning; ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    </div>
+<?php endif; ?>
+
+<div class="panel">
+    <div class="panel-header">
+        <h3 class="panel-title"><i class='bx bxs-school'></i> School Information</h3>
+    </div>
+    <div class="panel-body">
+        <form action="settings.php" method="post" enctype="multipart/form-data">
+            <div class="form-section">
+                <h4 class="section-title">Basic Information</h4>
+                <div class="form-group">
+                    <label for="name">School Name</label>
+                    <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($school_info['name']); ?>" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="logo">Logo Path</label>
+                    <div class="image-input-group">
+                        <input type="text" id="logo" name="logo" class="form-control" value="<?php echo htmlspecialchars($school_info['logo']); ?>">
+                        <button type="button" class="btn btn-primary open-media-library" data-target="logo">
+                            <i class='bx bx-images'></i> Browse Media Library
+                        </button>
+                    </div>
+                    <small class="form-text">Enter logo path or use the media library to select an image</small>
+                    
+                    <div id="unified-image-preview" class="image-preview-container">
+                        <div class="image-preview">
+                            <div id="preview-placeholder" class="preview-placeholder" style="<?php echo !empty($school_info['logo']) ? 'display: none;' : ''; ?>">
+                                <i class='bx bx-image'></i>
+                                <span>No logo selected</span>
+                                <small>Select from media library</small>
+                            </div>
+                            <img src="<?php echo !empty($school_info['logo']) ? htmlspecialchars($school_info['logo']) : ''; ?>" 
+                                alt="School Logo" 
+                                id="preview-image" 
+                                style="<?php echo empty($school_info['logo']) ? 'display: none;' : ''; ?>">
+                        </div>
+                        <div id="source-indicator" class="image-source-indicator"></div>
+                    </div>
+                </div>
+                
+                <?php if (!empty($school_info['logo'])): 
+                    // More comprehensive image verification
+                    $server_root = $_SERVER['DOCUMENT_ROOT'];
+                    $image_full_path = $server_root . $school_info['logo'];
+                    $image_exists = file_exists($image_full_path);
+                    $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($school_info['logo'], '/');
+                    $alt_exists = file_exists($alt_path);
+                    $best_match = function_exists('find_best_matching_image') ? find_best_matching_image($school_info['logo']) : '';
+                ?>
+                    <div class="image-verification <?php echo ($image_exists || $alt_exists) ? 'success' : 'error'; ?>">
+                        <?php if ($image_exists || $alt_exists): ?>
+                            <i class='bx bx-check-circle'></i> Logo file exists at this path
+                        <?php elseif ($best_match): ?>
+                            <i class='bx bx-check-circle'></i> Similar logo found at: <?php echo htmlspecialchars($best_match); ?>
+                        <?php else: ?>
+                            <i class='bx bx-x-circle'></i> Logo file not found at this path
+                            <div class="path-details">
+                                Tried: <?php echo htmlspecialchars($image_full_path); ?><br>
+                                And: <?php echo htmlspecialchars($alt_path); ?>
+                            </div>
+                            <div class="path-suggestion">
+                                <p>The logo should be placed in <code>/assets/images/branding/</code> directory.</p>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            
+            <div class="form-section">
+                <h4 class="section-title">Contact Information</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="email">Email</label>
+                            <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($school_info['email']); ?>" required>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="phone">Phone</label>
+                            <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($school_info['phone']); ?>" required>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="address">Address</label>
+                    <textarea id="address" name="address" required><?php echo htmlspecialchars($school_info['address']); ?></textarea>
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h4 class="section-title">School Philosophy</h4>
+                <div class="form-group">
+                    <label for="mission">Mission</label>
+                    <textarea id="mission" name="mission" rows="5"><?php echo htmlspecialchars($school_info['mission']); ?></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="vision">Vision</label>
+                    <textarea id="vision" name="vision" rows="5"><?php echo htmlspecialchars($school_info['vision']); ?></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="philosophy">Philosophy</label>
+                    <textarea id="philosophy" name="philosophy" rows="5"><?php echo htmlspecialchars($school_info['philosophy']); ?></textarea>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <i class='bx bx-save'></i> Save Settings
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .form-section {
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .form-section:last-child {
+        border-bottom: none;
+    }
+    
+    .section-title {
+        color: var(--primary-color);
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+    
+    .image-input-group {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .image-preview-container {
+        margin-top: 15px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 10px;
+        background-color: #f8f9fa;
+    }
+    
+    .image-preview {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 120px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .image-preview img {
+        max-height: 100px;
+        max-width: 100%;
+    }
+    
+    .preview-placeholder {
+        text-align: center;
+        color: #6c757d;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .preview-placeholder i {
+        font-size: 2rem;
+        display: block;
+        margin-bottom: 10px;
+    }
+    
+    .image-source-indicator {
+        margin-top: 8px;
+        font-size: 0.85rem;
+        color: #6c757d;
+        text-align: center;
+    }
+    
+    .image-verification {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+    
+    .image-verification.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .image-verification.error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .path-details, .path-suggestion {
+        margin-top: 5px;
+        font-size: 0.8rem;
+        opacity: 0.8;
+    }
+    
+    .path-suggestion code {
+        background-color: rgba(0,0,0,0.1);
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+    
+    .form-actions {
+        margin-top: 20px;
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    .row {
+        display: flex;
+        flex-wrap: wrap;
+        margin: 0 -10px;
+    }
+    
+    .col-md-6 {
+        flex: 0 0 50%;
+        max-width: 50%;
+        padding: 0 10px;
+    }
+    
+    @media (max-width: 768px) {
+        .col-md-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+        
+        .image-input-group {
+            flex-direction: column;
+        }
+    }
+    
+    /* Logo preview specific styles */
+    #unified-image-preview.library-mode .image-preview {
+        border-color: #28a745;
+        border-style: solid;
+    }
+    
+    #unified-image-preview .image-preview {
+        border-width: 2px;
+        border-style: dashed;
+        border-color: #ced4da;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing settings page with media library integration...');
+    
+    // Elements
+    const logoInput = document.getElementById('logo');
+    const previewImage = document.getElementById('preview-image');
+    const previewPlaceholder = document.getElementById('preview-placeholder');
+    const sourceIndicator = document.getElementById('source-indicator');
+    const previewContainer = document.getElementById('unified-image-preview');
+    
+    // Initialize with current logo path
+    function updatePreview(path) {
+        if (path && path.trim()) {
+            // Show image preview
+            previewImage.src = path;
+            previewImage.style.display = 'block';
+            previewPlaceholder.style.display = 'none';
+            
+            // Add library mode styling
+            previewContainer.classList.add('library-mode');
+            sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+        } else {
+            // Show placeholder
+            previewImage.style.display = 'none';
+            previewPlaceholder.style.display = 'flex';
+            
+            // Reset styling
+            previewContainer.classList.remove('library-mode');
+            sourceIndicator.innerHTML = '';
+        }
+    }
+    
+    // Initialize with current value
+    if (logoInput && logoInput.value.trim()) {
+        updatePreview(logoInput.value);
+    }
+    
+    // Handle changes to the input field directly
+    if (logoInput) {
+        logoInput.addEventListener('input', function() {
+            updatePreview(this.value);
+        });
+    }
+    
+    // Create global function for media library integration
+    window.UnifiedImageUploader = {
+        selectMediaItem: function(path) {
+            if (logoInput) {
+                logoInput.value = path;
+                updatePreview(path);
+            }
+        }
+    };
+    
+    // Compatibility layer for older code
+    window.selectMediaItem = function(path) {
+        window.UnifiedImageUploader.selectMediaItem(path);
+    };
+    
+    // Connect media library modal integration
+    const mediaModal = document.getElementById('media-library-modal');
+    if (mediaModal) {
+        const insertButton = mediaModal.querySelector('.insert-media');
+        if (insertButton) {
+            insertButton.addEventListener('click', function() {
+                const selectedItem = mediaModal.querySelector('.media-item.selected');
+                if (selectedItem) {
+                    const path = selectedItem.getAttribute('data-path');
+                    if (path && window.UnifiedImageUploader) {
+                        window.UnifiedImageUploader.selectMediaItem(path);
+                    }
+                }
+            });
+        }
+    }
+});
+</script>
+
+<?php
+include_once '../admin/includes/media-library.php';
+render_media_library('logo');
+
+// Get content from buffer
+$content = ob_get_clean();
+
+// Set page title and specific CSS/JS files
+$page_title = 'School Settings';
+$page_specific_css = [
+    '../assets/css/image-selector.css',
+    '../assets/css/media-library.css'
+];
+$page_specific_js = [
+    '../assets/js/media-library.js',
+    '../assets/js/media-modal.js'
+];
+
+// Include the layout
+include 'layout.php';
+?>

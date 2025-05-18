@@ -249,7 +249,7 @@ $results['error_log'] = [
         .directory-grid div {
             padding: 8px;
         }
-        .directory-grid .header {
+        .directory-grid .grid-header {
             font-weight: 500;
             background-color: #f8f9fa;
             padding: 10px 8px;
@@ -342,10 +342,10 @@ $results['error_log'] = [
         <div class="section">
             <h2 class="section-title">Directory Structure</h2>
             <div class="directory-grid">
-                <div class="header">Directory Path</div>
-                <div class="header">Exists</div>
-                <div class="header">Writable</div>
-                <div class="header">Created</div>
+                <div class="grid-header">Directory Path</div>
+                <div class="grid-header">Exists</div>
+                <div class="grid-header">Writable</div>
+                <div class="grid-header">Created</div>
                 
                 <?php foreach ($results['directories'] as $category => $dir): ?>
                 <div><?php echo $dir['path']; ?></div>

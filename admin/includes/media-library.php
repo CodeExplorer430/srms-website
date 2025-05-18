@@ -9,13 +9,20 @@ function get_media_library_assets() {
         'events' => '/assets/images/events/',
         'promotional' => '/assets/images/promotional/',
         'facilities' => '/assets/images/facilities/',
-        'campus' => '/assets/images/campus/'
+        'campus' => '/assets/images/campus/',
+        'branding' => '/assets/images/branding/'
     ];
     
     $all_media = [];
     
     foreach ($media_categories as $category => $path) {
         $server_path = $_SERVER['DOCUMENT_ROOT'] . $path;
+        
+        // Create directory if it doesn't exist
+        if (!is_dir($server_path)) {
+            // Try to create the directory with appropriate permissions
+            @mkdir($server_path, 0755, true);
+        }
         
         if (is_dir($server_path)) {
             $files = scandir($server_path);
@@ -93,6 +100,7 @@ function render_media_library($target_field = 'image') {
             <div class="filter-dropdown">
                 <select id="media-filter">
                     <option value="all">All Categories</option>
+                    <option value="branding">Branding</option>
                     <option value="news">News</option>
                     <option value="events">Events</option>
                     <option value="promotional">Promotional</option>
@@ -110,8 +118,11 @@ function render_media_library($target_field = 'image') {
                 <h3>Categories</h3>
                 <ul>
                     <li data-category="all" class="active">All Media</li>
+                    <li data-category="branding">Branding</li>
                     <?php foreach (array_keys($media) as $category): ?>
+                    <?php if ($category !== 'branding'): // Skip branding as we've already added it ?>
                     <li data-category="<?php echo $category; ?>"><?php echo ucfirst($category); ?></li>
+                    <?php endif; ?>
                     <?php endforeach; ?>
                 </ul>
                 
@@ -125,6 +136,7 @@ function render_media_library($target_field = 'image') {
                         <div class="form-group">
                             <label for="quick-category">Category</label>
                             <select id="quick-category" name="quick_category">
+                                <option value="branding">Branding</option>
                                 <option value="news">News</option>
                                 <option value="events">Events</option>
                                 <option value="promotional">Promotional</option>

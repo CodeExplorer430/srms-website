@@ -33,7 +33,8 @@ if(!isset($_FILES['bulk_files'])) {
 
 // Get category
 $category = isset($_POST['bulk_category']) ? $_POST['bulk_category'] : 'news';
-if(!in_array($category, ['news', 'events', 'promotional', 'facilities', 'campus'])) {
+// Added 'branding' to allowed categories
+if(!in_array($category, ['news', 'events', 'promotional', 'facilities', 'campus', 'branding'])) {
     $category = 'news';
 }
 

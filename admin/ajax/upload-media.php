@@ -31,9 +31,9 @@ if(!isset($_FILES['quick_upload']) || $_FILES['quick_upload']['error'] != UPLOAD
     exit;
 }
 
-// Get category
+// Get category - Added 'branding' to allowed categories
 $category = isset($_POST['quick_category']) ? $_POST['quick_category'] : 'news';
-if(!in_array($category, ['news', 'events', 'promotional', 'facilities', 'campus'])) {
+if(!in_array($category, ['news', 'events', 'promotional', 'facilities', 'campus', 'branding'])) {
     $category = 'news';
 }
 
