@@ -1,9 +1,9 @@
 /**
  * Unified Media Library Modal Handler - Fixed Version
- * Version: 2.1 (Error-fixed enhanced version)
+ * Version: 2.2 (Path handling fixes)
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Loading Media Modal v2.1 (Enhanced Error Handling)');
+    console.log('Loading Media Modal v2.2 (Path handling fixes)');
     
     // Utility functions for safer DOM operations
     function safeQuerySelector(element, selector) {
@@ -165,8 +165,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (previewImage && previewDetails) {
                         // Safely get attributes and properties
                         const imgElement = safeQuerySelector(this, 'img');
-                        const path = safeAttribute(this, 'data-path') || 
-                                    (imgElement ? safeAttribute(imgElement, 'src') : '') || '';
+                        let path = safeAttribute(this, 'data-path') || '';
+                        
+                        // If data-path is empty, fall back to img src
+                        if (!path && imgElement) {
+                            path = safeAttribute(imgElement, 'src') || '';
+                        }
+                        
+                        // Normalize path to ensure consistency
+                        path = normalizePath(path);
                         
                         const nameElement = safeQuerySelector(this, '.media-name');
                         const dimensionsElement = safeQuerySelector(this, '.media-dimensions');
@@ -187,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Enable insert button
                     if (insertButton) {
                         insertButton.classList.remove('disabled');
+                        insertButton.disabled = false;
                     }
                 } catch (error) {
                     console.error('Error in media item selection:', error);
@@ -336,20 +344,22 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Get selected image path and target field
                     const imgElement = safeQuerySelector(selectedItem, 'img');
-                    const path = safeAttribute(selectedItem, 'data-path') || 
-                                (imgElement ? safeAttribute(imgElement, 'src') : '');
+                    let path = safeAttribute(selectedItem, 'data-path') || '';
+                    
+                    // If data-path is empty, fall back to img src
+                    if (!path && imgElement) {
+                        path = safeAttribute(imgElement, 'src') || '';
+                    }
                     
                     const field = document.getElementById(targetFieldId);
                     
                     if (field && path) {
-                        // Ensure path is formatted correctly
-                        let formattedPath = normalizePath(path);
+                        // Normalize path
+                        path = normalizePath(path);
                         
                         // Extract the part of the path starting with /assets/ or /images/
-                        const match = formattedPath.match(/\/(?:assets|images)\/.*/);
-                        if (match) {
-                            formattedPath = match[0];
-                        }
+                        const match = path.match(/\/(?:assets|images)\/.*/);
+                        const formattedPath = match ? match[0] : path;
                         
                         console.log('Setting image path via media modal:', formattedPath);
                         

@@ -21,7 +21,7 @@ $db = new Database();
 // Get media statistics
 $media_counts = [
     'total' => 0,
-    'branding' => 0, // Added branding category
+    'branding' => 0,
     'news' => 0,
     'events' => 0,
     'promotional' => 0,
@@ -63,33 +63,76 @@ function get_category_icon($category) {
     }
 }
 
+// Determine project folder from SITE_URL
+$project_folder = '';
+if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+    $project_folder = $matches[1]; // Should be "srms-website"
+}
+
+// Get document root without trailing slash
+$doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+
+// Count images in each directory with improved path handling
 foreach ($media_directories as $key => $dir) {
-    // Normalize directory path for cross-platform compatibility
-    $dir_path = str_replace(['\\', '/'], DS, $dir);
-    $path = $_SERVER['DOCUMENT_ROOT'] . $dir_path;
+    // Build the full server path INCLUDING project folder
+    $path = $doc_root;
+    if (!empty($project_folder)) {
+        $path .= DIRECTORY_SEPARATOR . $project_folder;
+    }
+    $path .= str_replace('/', DIRECTORY_SEPARATOR, $dir);
+    
+    // Log the path we're checking (for debugging)
+    error_log("Checking media directory: {$path}");
     
     if (is_dir($path)) {
         // Use a platform-neutral pattern for globbing
-        $pattern = $path . DS . "*.{jpg,jpeg,png,gif}";
+        $pattern = $path . DIRECTORY_SEPARATOR . "*.{jpg,jpeg,png,gif}";
         $files = glob($pattern, GLOB_BRACE);
-        $count = count($files);
+        
+        if ($files === false) {
+            // Log glob error
+            error_log("Error using glob on pattern: {$pattern}");
+            $count = 0;
+        } else {
+            $count = count($files);
+            // Log the files found
+            error_log("Found {$count} files in {$key} directory");
+        }
+        
         $media_counts[$key] = $count;
         $media_counts['total'] += $count;
+    } else {
+        // Log directory not found
+        error_log("Directory not found: {$path}");
+        // Try to create the directory
+        if (!is_dir($path) && !empty($project_folder)) {
+            if (mkdir($path, 0755, true)) {
+                error_log("Created directory: {$path}");
+            } else {
+                error_log("Failed to create directory: {$path}");
+            }
+        }
     }
 }
 
 // Handle file deletion if requested
 if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'])) {
     $file_path = urldecode($_GET['file']);
-    // Normalize file path for cross-platform compatibility
-    $file_path = str_replace(['\\', '/'], DS, $file_path);
-    $full_path = $_SERVER['DOCUMENT_ROOT'] . $file_path;
+    
+    // Build the full server path INCLUDING project folder
+    $full_path = $doc_root;
+    if (!empty($project_folder)) {
+        $full_path .= DIRECTORY_SEPARATOR . $project_folder;
+    }
+    $full_path .= str_replace('/', DIRECTORY_SEPARATOR, $file_path);
+    
+    // Log the delete attempt
+    error_log("Attempting to delete: {$full_path}");
     
     // Verify path is within allowed directories
     $is_allowed = false;
     foreach ($media_directories as $dir) {
-        $normalized_dir = str_replace(['\\', '/'], DS, $dir);
-        if (strpos($file_path, $normalized_dir) === 0) {
+        if (strpos($file_path, $dir) === 0) {
             $is_allowed = true;
             break;
         }
@@ -98,11 +141,14 @@ if (isset($_GET['action']) && $_GET['action'] === 'delete' && isset($_GET['file'
     if ($is_allowed && file_exists($full_path) && is_file($full_path)) {
         if (unlink($full_path)) {
             $delete_success = true;
+            error_log("Successfully deleted: {$full_path}");
         } else {
             $delete_error = 'Failed to delete the file. Check file permissions.';
+            error_log("Failed to delete: {$full_path}");
         }
     } else {
         $delete_error = 'Invalid file path or file not found.';
+        error_log("File not found or not allowed: {$full_path}");
     }
 }
 
@@ -208,14 +254,17 @@ ob_start();
         <?php
         // Generate media sections by category
         foreach ($media_directories as $category => $dir):
-            // Normalize directory path for cross-platform compatibility
-            $dir_path = str_replace(['\\', '/'], DS, $dir);
-            $path = $_SERVER['DOCUMENT_ROOT'] . $dir_path;
+            // Build the full server path INCLUDING project folder
+            $path = $doc_root;
+            if (!empty($project_folder)) {
+                $path .= DIRECTORY_SEPARATOR . $project_folder;
+            }
+            $path .= str_replace('/', DIRECTORY_SEPARATOR, $dir);
             
             if (is_dir($path)):
                 // Use a platform-neutral pattern for globbing
-                $pattern = $path . DS . "*.{jpg,jpeg,png,gif}";
-                $files = glob($pattern, GLOB_BRACE);
+                $pattern = $path . DIRECTORY_SEPARATOR . "*.{jpg,jpeg,png,gif}";
+                $files = glob($pattern, GLOB_BRACE) ?: [];
                 
                 // Sort files by modification time (newest first)
                 usort($files, function($a, $b) {
@@ -237,25 +286,27 @@ ob_start();
                     <p>No images found in the <?php echo ucfirst($category); ?> category.</p>
                 </div>
                 <?php else: ?>
-                    <?php foreach ($files as $file): 
-                        $file_path = str_replace($_SERVER['DOCUMENT_ROOT'], '', $file);
+                    <?php foreach ($files as $file):
+                        // Generate web URL for browser use with improved function
+                        $file_web_path = filesystem_path_to_url($file, true);
+                        
                         $file_name = basename($file);
                         $file_time = filemtime($file);
                     ?>
                     <div class="media-item" data-category="<?php echo $category; ?>">
                         <div class="media-select">
-                            <input type="checkbox" class="media-checkbox" data-path="<?php echo htmlspecialchars($file_path); ?>">
+                            <input type="checkbox" class="media-checkbox" data-path="<?php echo htmlspecialchars($file_web_path); ?>">
                         </div>
                         <div class="media-thumbnail">
-                            <img src="<?php echo $file_path; ?>" alt="<?php echo htmlspecialchars($file_name); ?>">
+                            <img src="<?php echo htmlspecialchars($file_web_path); ?>" alt="<?php echo htmlspecialchars($file_name); ?>">
                             <div class="media-actions">
-                                <button type="button" class="media-action view" onclick="viewMedia('<?php echo htmlspecialchars(addslashes($file_path)); ?>', '<?php echo htmlspecialchars(addslashes($file_name)); ?>')">
+                                <button type="button" class="media-action view" onclick="viewMedia('<?php echo htmlspecialchars(addslashes($file_web_path)); ?>', '<?php echo htmlspecialchars(addslashes($file_name)); ?>')">
                                     <i class='bx bx-fullscreen'></i>
                                 </button>
-                                <button type="button" class="media-action copy" onclick="copyPath('<?php echo htmlspecialchars(addslashes($file_path)); ?>')">
+                                <button type="button" class="media-action copy" onclick="copyPath('<?php echo htmlspecialchars(addslashes($file_web_path)); ?>')">
                                     <i class='bx bx-copy'></i>
                                 </button>
-                                <button type="button" class="media-action delete" onclick="confirmDelete('<?php echo htmlspecialchars(addslashes($file_path)); ?>')">
+                                <button type="button" class="media-action delete" onclick="confirmDelete('<?php echo htmlspecialchars(addslashes($file_web_path)); ?>')">
                                     <i class='bx bx-trash'></i>
                                 </button>
                             </div>
@@ -1278,12 +1329,42 @@ ob_start();
     // Path normalization utility function
     function normalizePath(path) {
         if (!path) return '';
+        
+        console.log("Normalizing path:", path);
+        
         // Replace all backslashes with forward slashes
         let normalized = path.replace(/\\/g, '/');
+        
         // Remove any double slashes
         normalized = normalized.replace(/\/+/g, '/');
+        
+        // Get the project folder from the current URL
+        const urlPath = window.location.pathname;
+        const projectMatch = urlPath.match(/^\/([^\/]+)\//);
+        const projectFolder = projectMatch ? projectMatch[1] : '';
+        
+        console.log("Project folder detected:", projectFolder);
+        
+        // Check if project folder is already in the path
+        const hasProjectFolder = projectFolder && normalized.startsWith('/' + projectFolder + '/');
+        
+        // Strip project folder if already present to avoid duplication
+        if (hasProjectFolder) {
+            normalized = normalized.substring(('/' + projectFolder).length);
+            console.log("Removed existing project folder, now:", normalized);
+        }
+        
         // Ensure path starts with a single slash
-        normalized = '/' + normalized.replace(/^\/+/, '');
+        if (normalized.charAt(0) !== '/') {
+            normalized = '/' + normalized;
+        }
+        
+        // Ensure path has consistent format
+        normalized = normalized.replace(/^\/+/, '/');
+        
+        // Important: Return just the path without project folder
+        // The server will handle adding it back if needed
+        console.log("Final normalized path:", normalized);
         return normalized;
     }
 </script>

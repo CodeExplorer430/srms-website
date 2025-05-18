@@ -3,6 +3,18 @@
  * Media Library Component for SRMS Admin Panel
  */
 function get_media_library_assets() {
+    // Get document root
+    $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+    
+    // Get project folder from SITE_URL
+    $project_folder = '';
+    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // Should be "srms-website"
+    }
+    
+    // Log information about the media scan
+    error_log("Media Library: Scanning with project folder: " . $project_folder);
+    
     // Scan directories for images
     $media_categories = [
         'news' => '/assets/images/news/',
@@ -16,10 +28,18 @@ function get_media_library_assets() {
     $all_media = [];
     
     foreach ($media_categories as $category => $path) {
-        $server_path = $_SERVER['DOCUMENT_ROOT'] . $path;
+        // Build the correct server path
+        $server_path = $doc_root;
+        if (!empty($project_folder)) {
+            $server_path .= DIRECTORY_SEPARATOR . $project_folder;
+        }
+        $server_path .= str_replace('/', DIRECTORY_SEPARATOR, $path);
+        
+        error_log("Media Library: Checking directory: " . $server_path);
         
         // Create directory if it doesn't exist
         if (!is_dir($server_path)) {
+            error_log("Media Library: Creating directory: " . $server_path);
             // Try to create the directory with appropriate permissions
             @mkdir($server_path, 0755, true);
         }
@@ -31,50 +51,39 @@ function get_media_library_assets() {
             foreach ($files as $file) {
                 if ($file == '.' || $file == '..') continue;
                 
+                // Server file path and absolute path
                 $file_path = $path . $file;
-                $full_path = $_SERVER['DOCUMENT_ROOT'] . $file_path;
+                $full_path = $server_path . DIRECTORY_SEPARATOR . $file;
                 
                 if (is_file($full_path) && in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'gif'])) {
+                    // Get dimensions for the image
+                    $dimensions = @getimagesize($full_path) ?: [0, 0];
+                    
+                    // Generate web URL with project folder
+                    $web_url = '';
+                    if (!empty($project_folder)) {
+                        $web_url = '/' . $project_folder . $file_path;
+                    } else {
+                        $web_url = $file_path;
+                    }
+                    
+                    // Log the path mapping for debugging
+                    error_log("Media Library: Mapped path {$file_path} to URL {$web_url}");
+                    
                     $media_files[] = [
                         'name' => $file,
-                        'path' => $file_path,
-                        'url' => $file_path,
+                        'path' => $file_path,  // For internal references (relative path)
+                        'url' => $web_url,     // For browser URLs (with project folder)
                         'size' => filesize($full_path),
                         'modified' => filemtime($full_path),
-                        'dimensions' => @getimagesize($full_path) ?: [0, 0]
+                        'dimensions' => $dimensions
                     ];
                 }
             }
             
             $all_media[$category] = $media_files;
+            error_log("Media Library: Found " . count($media_files) . " files in category: " . $category);
         }
-    }
-    
-    // Include legacy paths if they exist
-    $legacy_path = $_SERVER['DOCUMENT_ROOT'] . '/images/';
-    if (is_dir($legacy_path)) {
-        $files = scandir($legacy_path);
-        $legacy_files = [];
-        
-        foreach ($files as $file) {
-            if ($file == '.' || $file == '..') continue;
-            
-            $file_path = '/images/' . $file;
-            $full_path = $legacy_path . $file;
-            
-            if (is_file($full_path) && in_array(strtolower(pathinfo($file, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'gif'])) {
-                $legacy_files[] = [
-                    'name' => $file,
-                    'path' => $file_path,
-                    'url' => $file_path,
-                    'size' => filesize($full_path),
-                    'modified' => filemtime($full_path),
-                    'dimensions' => @getimagesize($full_path) ?: [0, 0]
-                ];
-            }
-        }
-        
-        $all_media['legacy'] = $legacy_files;
     }
     
     return $all_media;
@@ -195,3 +204,4 @@ function render_media_library($target_field = 'image') {
 </div>
 <?php
 }
+?>

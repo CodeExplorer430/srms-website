@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             exit;
         }
         
-        // Normalize image path
+        // Properly normalize image path to ensure consistent storage format
         $image = normalize_image_path($image);
         
         // Prepare data for database

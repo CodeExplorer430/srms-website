@@ -1,9 +1,72 @@
 /**
  * Media Library functionality for St. Raphaela Mary School Admin
- * Version: 3.0 (Truly Unified Image Preview)
+ * Version: 3.3 (Enhanced path handling)
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Loading Media Library v3.0 (Truly Unified Image Preview)');
+    console.log('Loading Media Library v3.3 (Enhanced path handling)');
+    
+    // Helper function to ensure path is correctly formatted
+    function formatImagePath(path) {
+        if (!path) return '';
+        
+        // Remove any leading slashes
+        path = path.replace(/^\/+/, '');
+        
+        // Ensure path starts with a single slash
+        return '/' + path;
+    }
+    
+    // Utility function to get correct image URL with project folder
+    function getCorrectImageUrl(path) {
+        if (!path) return '';
+        
+        // Get current URL components
+        const origin = window.location.origin;
+        const urlParts = window.location.pathname.split('/');
+        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        
+        // Make sure path starts with a slash
+        if (!path.startsWith('/')) {
+            path = '/' + path;
+        }
+        
+        // Don't add project folder if it's already in the path
+        if (projectFolder && path.toLowerCase().startsWith('/' + projectFolder.toLowerCase() + '/')) {
+            return origin + path;
+        }
+        
+        // Add project folder to path
+        if (projectFolder) {
+            return origin + '/' + projectFolder + path;
+        }
+        
+        // No project folder
+        return origin + path;
+    }
+    
+    // Override the selectMediaItem global function if it exists
+    if (typeof window.originalSelectMediaItem === 'undefined' && typeof window.selectMediaItem === 'function') {
+        // Store the original function
+        window.originalSelectMediaItem = window.selectMediaItem;
+        
+        // Replace with our enhanced version
+        window.selectMediaItem = function(path, displayUrl) {
+            // Format the path correctly before passing to original function
+            const formattedPath = formatImagePath(path);
+            console.log('Media Library: Using formatted path:', formattedPath);
+            
+            // Generate display URL for preview (correctly handles project folder)
+            const displayImageUrl = displayUrl || getCorrectImageUrl(formattedPath);
+            console.log('Media Library: Display URL for preview:', displayImageUrl);
+            
+            // Call the original function with the formatted path (for database storage)
+            if (typeof window.originalSelectMediaItem === 'function') {
+                // Pass both paths to original handler - the formatted path for storage
+                // and the display URL for immediate preview
+                window.originalSelectMediaItem(formattedPath, displayImageUrl);
+            }
+        };
+    }
     
     // Utility functions for safer DOM operations
     function safeQuerySelector(element, selector) {
@@ -113,6 +176,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Safely get path attribute with fallback
                     const path = safeAttribute(this, 'data-path') || '';
                     
+                    // Get the img element for direct src if needed
+                    const imgElement = this.querySelector('img');
+                    const imgSrc = imgElement ? imgElement.getAttribute('src') : '';
+                    
+                    // Use path or fallback to img src
+                    const finalPath = path || imgSrc;
+                    
                     // Safely get elements and their content
                     const nameElement = safeQuerySelector(this, '.media-name');
                     const dimensionsElement = safeQuerySelector(this, '.media-dimensions');
@@ -125,14 +195,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Update preview if elements exist
                     if (previewImage) {
-                        previewImage.innerHTML = `<img src="${path}" alt="${name}">`;
+                        // Use correct URL with project folder
+                        const displayUrl = getCorrectImageUrl(finalPath);
+                        previewImage.innerHTML = `<img src="${displayUrl}" alt="${name}">`;
                     }
                     
                     if (previewDetails) {
                         previewDetails.innerHTML = `
                             <strong>${name}</strong><br>
                             <span>${dimensions}</span><br>
-                            <code style="color: #6c757d; font-size: 12px; word-break: break-all;">${path}</code>
+                            <code style="color: #6c757d; font-size: 12px; word-break: break-all;">${finalPath}</code>
                         `;
                     }
                     
@@ -149,13 +221,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add double-click for faster selection
             item.addEventListener('dblclick', function() {
                 try {
-                    const path = safeAttribute(this, 'data-path') || '';
+                    // Get path from data attribute or img src as fallback
+                    let path = safeAttribute(this, 'data-path') || '';
+                    const imgElement = this.querySelector('img');
+                    if (!path && imgElement) {
+                        path = imgElement.getAttribute('src') || '';
+                    }
+                    
                     const targetField = insertButton ? insertButton.getAttribute('data-target') : 'image';
                     const inputField = document.getElementById(targetField);
                     
                     if (inputField && path) {
-                        // Update input field value
-                        inputField.value = path;
+                        // Update input field value with formatted path
+                        inputField.value = formatImagePath(path);
                         
                         // Use global function if available
                         if (typeof window.selectMediaItem === 'function') {
@@ -183,10 +261,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     const selectedItem = mediaModal.querySelector('.media-item.selected');
                     
                     if (selectedItem) {
-                        // Ensure path always starts with a slash and normalize
+                        // Get path from data attribute or img src as fallback
                         let path = selectedItem.getAttribute('data-path') || '';
+                        const imgElement = selectedItem.querySelector('img');
+                        if (!path && imgElement) {
+                            path = imgElement.getAttribute('src') || '';
+                        }
+                        
                         if (path) {
-                            path = '/' + path.replace(/^\/+/, '');
+                            // Format the path properly
+                            path = formatImagePath(path);
                             
                             const targetField = this.getAttribute('data-target');
                             const inputField = document.getElementById(targetField);
@@ -446,8 +530,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Fix insert button behavior
 document.addEventListener('DOMContentLoaded', function() {
-    // Fix insert button behavior
     setTimeout(function() {
         const insertButton = document.querySelector('.insert-media');
         if (insertButton) {
@@ -462,9 +546,18 @@ document.addEventListener('DOMContentLoaded', function() {
                     const selectedItem = mediaModal.querySelector('.media-item.selected');
                     
                     if (selectedItem) {
-                        // Get path
-                        const path = selectedItem.getAttribute('data-path');
+                        // Get path from data attribute or img src as fallback
+                        let path = selectedItem.getAttribute('data-path') || '';
+                        const imgElement = selectedItem.querySelector('img');
+                        if (!path && imgElement) {
+                            path = imgElement.getAttribute('src') || '';
+                        }
+                        
                         if (path) {
+                            // Format path correctly
+                            path = path.replace(/^\/+/, '');
+                            path = '/' + path;
+                            
                             // Update the input field
                             const targetField = this.getAttribute('data-target') || 'image';
                             const inputField = document.getElementById(targetField);
@@ -481,6 +574,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             // Close the modal
                             mediaModal.style.display = 'none';
+                            document.body.style.overflow = '';
                         }
                     }
                 } catch (error) {
@@ -498,7 +592,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const originalSelectMediaItem = window.selectMediaItem;
     
     // Debounce wrapper to prevent multiple rapid calls
-    window.selectMediaItem = function(path) {
+    window.selectMediaItem = function(path, displayUrl) {
         if (typeof originalSelectMediaItem === 'function') {
             // Clear any pending calls
             if (window.selectMediaItemTimeout) {
@@ -507,7 +601,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Set up new delayed call
             window.selectMediaItemTimeout = setTimeout(function() {
-                originalSelectMediaItem(path);
+                originalSelectMediaItem(path, displayUrl);
             }, 50);
         }
     };

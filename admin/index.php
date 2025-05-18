@@ -40,10 +40,27 @@ $media_directories = [
     'campus' => '/assets/images/campus'
 ];
 
+// Get document root without trailing slash
+$doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+
+// Determine project folder from SITE_URL
+$project_folder = '';
+if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+    $project_folder = $matches[1]; // Should be "srms-website"
+}
+
 foreach ($media_directories as $key => $dir) {
-    $path = $_SERVER['DOCUMENT_ROOT'] . $dir;
+    // Build the full server path INCLUDING project folder
+    $path = $doc_root;
+    if (!empty($project_folder)) {
+        $path .= DIRECTORY_SEPARATOR . $project_folder;
+    }
+    $path .= str_replace('/', DIRECTORY_SEPARATOR, $dir);
+    
     if (is_dir($path)) {
-        $files = glob($path . "/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
+        // Use a platform-neutral pattern for globbing
+        $pattern = $path . DIRECTORY_SEPARATOR . "*.{jpg,jpeg,png,gif}";
+        $files = glob($pattern, GLOB_BRACE);
         $count = count($files);
         $media_counts[$key] = $count;
         $media_counts['total'] += $count;
@@ -56,14 +73,23 @@ $recent_contacts = $db->fetch_all("SELECT * FROM contact_submissions ORDER BY su
 // Get recent media uploads
 $recent_media = [];
 foreach ($media_directories as $key => $dir) {
-    $path = $_SERVER['DOCUMENT_ROOT'] . $dir;
+    // Build the correct server path
+    $path = $doc_root;
+    if (!empty($project_folder)) {
+        $path .= DIRECTORY_SEPARATOR . $project_folder;
+    }
+    $path .= str_replace('/', DIRECTORY_SEPARATOR, $dir);
+    
     if (is_dir($path)) {
-        $files = glob($path . "/*.{jpg,jpeg,png,gif}", GLOB_BRACE);
+        $files = glob($path . DIRECTORY_SEPARATOR . "*.{jpg,jpeg,png,gif}", GLOB_BRACE);
         
         foreach ($files as $file) {
             if (is_file($file)) {
+                // Convert server path to web path using improved function
+                $file_web_path = filesystem_path_to_url($file, true);
+                
                 $recent_media[] = [
-                    'path' => str_replace($_SERVER['DOCUMENT_ROOT'], '', $file),
+                    'path' => $file_web_path,
                     'name' => basename($file),
                     'type' => $key,
                     'modified' => filemtime($file)

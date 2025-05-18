@@ -30,6 +30,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <span class="menu-text">Pages</span>
                 </a>
             </li>
+            <li class="menu-item <?php echo ($current_page === 'navigation-manage.php') ? 'active' : ''; ?>">
+                <a href="navigation-manage.php">
+                    <i class='bx bx-menu'></i>
+                    <span class="menu-text">Navigation Menu</span>
+                </a>
+            </li>
             <li class="menu-item <?php echo ($current_page === 'homepage-manage.php') ? 'active' : ''; ?>">
                 <a href="homepage-manage.php">
                     <i class='bx bxs-home-circle'></i>

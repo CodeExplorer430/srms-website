@@ -1,7 +1,7 @@
 /**
  * Unified Image Uploader
  * Provides a single, consistent interface for image uploads and media library integration
- * Version: 1.0.0
+ * Version: 1.1.0 (Enhanced path handling)
  */
 (function() {
     // Main configuration
@@ -224,11 +224,22 @@
         console.log('🔄 Resetting image state');
         
         // Reset UI elements
-        elements.previewImage.src = '';
-        elements.previewImage.style.display = 'none';
-        elements.previewPlaceholder.style.display = 'flex';
-        elements.sourceIndicator.innerHTML = '';
-        elements.previewContainer.className = 'image-preview-container';
+        if (elements.previewImage) {
+            elements.previewImage.src = '';
+            elements.previewImage.style.display = 'none';
+        }
+        
+        if (elements.previewPlaceholder) {
+            elements.previewPlaceholder.style.display = 'flex';
+        }
+        
+        if (elements.sourceIndicator) {
+            elements.sourceIndicator.innerHTML = '';
+        }
+        
+        if (elements.previewContainer) {
+            elements.previewContainer.className = 'image-preview-container';
+        }
         
         // Reset file name display
         if (elements.fileNameDisplay) {
@@ -245,9 +256,41 @@
             selectedFile: null
         };
     }
-    
+
+    // Function to get absolute URL with project folder
+    function getFullImageUrl(path) {
+        // If already a full URL, return as is
+        if (path.startsWith('http')) return path;
+        
+        // Get protocol and domain
+        const origin = window.location.origin;
+        
+        // Get project folder from URL
+        const urlParts = window.location.pathname.split('/');
+        const projectFolder = urlParts[1] ? urlParts[1].toLowerCase() : '';
+        
+        // Make sure path starts with a slash
+        if (!path.startsWith('/')) {
+            path = '/' + path;
+        }
+        
+        // Do not add project folder if it's already in the path
+        const lowerPath = path.toLowerCase();
+        if (projectFolder && lowerPath.startsWith('/' + projectFolder.toLowerCase() + '/')) {
+            return origin + path;
+        }
+        
+        // Add project folder if it's not already in the path
+        if (projectFolder) {
+            return origin + '/' + projectFolder + path;
+        }
+        
+        // No project folder or already included in path
+        return origin + path;
+    }
+
     // Activate library mode (for media library selections)
-    function activateLibraryMode(path) {
+    function activateLibraryMode(path, displayUrl) {
         if (!path || path.trim() === '') {
             resetState();
             return;
@@ -258,21 +301,35 @@
         // Reset first to clear previous state
         resetState();
         
-        // Format path
+        // Format path (for storage in input field - keep this as relative path)
         const formattedPath = normalizePath(path);
         state.currentPath = formattedPath;
         state.mode = 'library';
         
         // Update UI for library mode
-        elements.previewContainer.classList.add('library-mode');
-        elements.sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+        if (elements.previewContainer) {
+            elements.previewContainer.classList.add('library-mode');
+        }
         
-        // Update preview
-        elements.previewImage.src = formattedPath;
-        elements.previewImage.style.display = 'block';
-        elements.previewPlaceholder.style.display = 'none';
+        if (elements.sourceIndicator) {
+            elements.sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+        }
         
-        // Set input value if it's different
+        // Get absolute URL for image display (critical fix)
+        const fullImageUrl = displayUrl || getFullImageUrl(formattedPath);
+        console.log('🔄 Using full image URL:', fullImageUrl);
+        
+        // Update preview with full URL
+        if (elements.previewImage) {
+            elements.previewImage.src = fullImageUrl;
+            elements.previewImage.style.display = 'block';
+        }
+        
+        if (elements.previewPlaceholder) {
+            elements.previewPlaceholder.style.display = 'none';
+        }
+        
+        // Set input value as relative path (for database storage)
         if (elements.imageInput && elements.imageInput.value !== formattedPath) {
             elements.imageInput.value = formattedPath;
         }
@@ -282,7 +339,7 @@
             elements.imageUpload.value = '';
         }
     }
-    
+        
     // Activate upload mode (for local file uploads)
     function activateUploadMode(dataUrl, file) {
         if (!dataUrl) {
@@ -308,13 +365,23 @@
         }
         
         // Update UI for upload mode
-        elements.previewContainer.classList.add('upload-mode');
-        elements.sourceIndicator.innerHTML = `<span><i class="bx bx-upload"></i> Local upload: <strong>${file ? file.name : ''}</strong> (not saved until you submit)</span>`;
+        if (elements.previewContainer) {
+            elements.previewContainer.classList.add('upload-mode');
+        }
+        
+        if (elements.sourceIndicator) {
+            elements.sourceIndicator.innerHTML = `<span><i class="bx bx-upload"></i> Local upload: <strong>${file ? file.name : ''}</strong> (not saved until you submit)</span>`;
+        }
         
         // Update preview
-        elements.previewImage.src = dataUrl;
-        elements.previewImage.style.display = 'block';
-        elements.previewPlaceholder.style.display = 'none';
+        if (elements.previewImage) {
+            elements.previewImage.src = dataUrl;
+            elements.previewImage.style.display = 'block';
+        }
+        
+        if (elements.previewPlaceholder) {
+            elements.previewPlaceholder.style.display = 'none';
+        }
         
         // Do NOT clear the text input - we need both for the form submission
         // This is a key difference from library mode
@@ -323,8 +390,14 @@
     // Show error state
     function showError(message) {
         console.error('🔄 Image error:', message);
-        elements.previewContainer.classList.add('error-mode');
-        elements.sourceIndicator.innerHTML = '<span><i class="bx bx-error-circle"></i> ' + message + '</span>';
+        
+        if (elements.previewContainer) {
+            elements.previewContainer.classList.add('error-mode');
+        }
+        
+        if (elements.sourceIndicator) {
+            elements.sourceIndicator.innerHTML = '<span><i class="bx bx-error-circle"></i> ' + message + '</span>';
+        }
     }
     
     // Normalize path format
@@ -340,14 +413,84 @@
         // Ensure path starts with a single slash
         normalized = '/' + normalized.replace(/^\/+/, '');
         
+        // Log the normalized path for debugging
+        console.log('🔄 Normalized path from', path, 'to', normalized);
+        
         return normalized;
+    }
+
+    // Enhanced previewImage error handling
+    if (elements.previewImage) {
+        elements.previewImage.addEventListener('error', function() {
+            console.log('🔄 Image preview error for path:', this.src);
+            
+            // Get project folder from URL
+            const urlParts = window.location.pathname.split('/');
+            const projectFolder = urlParts[1] ? urlParts[1].toLowerCase() : '';
+            console.log('🔄 Project folder detected:', projectFolder);
+            
+            // If projectFolder is found
+            if (projectFolder) {
+                // Extract base path without domain
+                let basePath = this.src;
+                if (basePath.startsWith(window.location.origin)) {
+                    basePath = basePath.substring(window.location.origin.length);
+                }
+                console.log('🔄 Base path:', basePath);
+                
+                // Build alternative paths to try
+                const alternativePaths = [];
+                
+                // 1. Try with project folder if not already present
+                if (!basePath.toLowerCase().includes('/' + projectFolder.toLowerCase() + '/')) {
+                    alternativePaths.push(window.location.origin + '/' + projectFolder + basePath);
+                }
+                
+                // 2. Try without project folder if already present
+                if (basePath.toLowerCase().includes('/' + projectFolder.toLowerCase() + '/')) {
+                    const pathWithoutProject = basePath.replace(new RegExp('/' + projectFolder + '/', 'i'), '/');
+                    alternativePaths.push(window.location.origin + pathWithoutProject);
+                }
+                
+                // 3. Try with filename only in various common directories
+                const filename = basePath.split('/').pop();
+                const imageCategories = ['news', 'events', 'promotional', 'campus', 'facilities', 'branding'];
+                
+                imageCategories.forEach(category => {
+                    alternativePaths.push(window.location.origin + '/' + projectFolder + '/assets/images/' + category + '/' + filename);
+                });
+                
+                console.log('🔄 Trying alternative paths:', alternativePaths);
+                
+                // Try each alternative path
+                let pathIndex = 0;
+                const tryNextPath = () => {
+                    if (pathIndex < alternativePaths.length) {
+                        console.log('🔄 Trying path:', alternativePaths[pathIndex]);
+                        this.src = alternativePaths[pathIndex++];
+                    } else {
+                        // If all paths fail, show error but don't prevent upload
+                        showError('Image preview unavailable, but upload should still work');
+                    }
+                };
+                
+                // Set up one-time event listener for the next attempt
+                this.addEventListener('error', tryNextPath, {once: true});
+                
+                // Start trying alternative paths
+                tryNextPath();
+            } else {
+                // Simple fallback if no project folder
+                showError('Image preview unavailable');
+            }
+        });
     }
     
     // Expose global interface for external scripts
     window.UnifiedImageUploader = {
         // Public methods
-        selectMediaItem: function(path) {
-            activateLibraryMode(path);
+        selectMediaItem: function(path, displayUrl) {
+            activateLibraryMode(path, displayUrl);
         },
         reset: function() {
             resetState();
@@ -359,8 +502,8 @@
     };
     
     // Create legacy compatibility layer
-    window.selectMediaItem = function(path) {
-        window.UnifiedImageUploader.selectMediaItem(path);
+    window.selectMediaItem = function(path, displayUrl) {
+        window.UnifiedImageUploader.selectMediaItem(path, displayUrl);
     };
     
     window.captureMediaSelection = function(path) {

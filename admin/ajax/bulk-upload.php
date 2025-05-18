@@ -39,6 +39,9 @@ if(!in_array($category, ['news', 'events', 'promotional', 'facilities', 'campus'
 }
 
 try {
+    // Log for debugging
+    error_log("Bulk upload: Starting file processing for category '{$category}' with " . count($_FILES['bulk_files']['name']) . " files");
+    
     $results = [];
     $success_count = 0;
     $error_count = 0;
@@ -65,10 +68,11 @@ try {
                 'message' => $error_message
             ];
             $error_count++;
+            error_log("Bulk upload: File '{$temp_file['name']}' has error: {$error_message}");
             continue;
         }
         
-        // Upload the image using the cross-platform enabled upload_image function
+        // Upload the image using our enhanced upload_image function
         $upload_result = upload_image($temp_file, $category);
         
         if($upload_result) {
@@ -81,6 +85,7 @@ try {
                 'path' => $web_path
             ];
             $success_count++;
+            error_log("Bulk upload: Successfully uploaded '{$temp_file['name']}' to '{$web_path}'");
         } else {
             $results[] = [
                 'filename' => $temp_file['name'],
@@ -88,6 +93,7 @@ try {
                 'message' => 'Failed to upload file'
             ];
             $error_count++;
+            error_log("Bulk upload: Failed to upload '{$temp_file['name']}'");
         }
     }
     
@@ -109,6 +115,7 @@ try {
     ob_end_clean();
     header('Content-Type: application/json');
     echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+    error_log("Bulk upload exception: " . $e->getMessage());
 }
 
 // Helper function to get error message for upload error codes

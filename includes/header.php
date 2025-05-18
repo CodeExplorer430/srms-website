@@ -31,6 +31,38 @@ if (strpos($current_url, 'academics/') !== false) {
     $academic_level = end($parts);
     $academic_level = str_replace('.php', '', $academic_level);
 }
+
+// Retrieve navigation menu items from database
+try {
+    $navigation = [];
+    $main_items = $db->fetch_all("SELECT * FROM navigation WHERE parent_id IS NULL AND is_active = 1 ORDER BY display_order ASC");
+    
+    foreach ($main_items as &$item) {
+        $item['children'] = $db->fetch_all("SELECT * FROM navigation WHERE parent_id = {$item['id']} AND is_active = 1 ORDER BY display_order ASC");
+    }
+    
+    $navigation = $main_items;
+} catch (Exception $e) {
+    // If database query fails, fall back to static menu items
+    error_log("Navigation error: " . $e->getMessage());
+    
+    $navigation = [
+        ['id' => 1, 'name' => 'HOME', 'url' => '/index.php', 'children' => []],
+        ['id' => 2, 'name' => 'ADMISSIONS', 'url' => '/admissions.php', 'children' => []],
+        ['id' => 3, 'name' => 'ABOUT SRMS', 'url' => '/about.php', 'children' => [
+            ['name' => 'ALUMNI', 'url' => '/alumni.php'],
+            ['name' => 'FACULTY', 'url' => '/faculty.php']
+        ]],
+        ['id' => 4, 'name' => 'ACADEMICS', 'url' => '#', 'children' => [
+            ['name' => 'PRESCHOOL', 'url' => '#'],
+            ['name' => 'ELEMENTARY', 'url' => '#'],
+            ['name' => 'JUNIOR HIGH', 'url' => '#'],
+            ['name' => 'SENIOR HIGH', 'url' => '/academics/senior-high.php']
+        ]],
+        ['id' => 5, 'name' => 'NEWS', 'url' => '/news.php', 'children' => []],
+        ['id' => 6, 'name' => 'CONTACT', 'url' => '/contact.php', 'children' => []]
+    ];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -60,41 +92,38 @@ if (strpos($current_url, 'academics/') !== false) {
         </a>
         
         <ul class="menu-link">
-            <li>
-                <a href="<?php echo SITE_URL; ?>/index.php" class="sub-menu-link <?php echo ($current_page === 'index.php') ? 'active' : ''; ?>">HOME</a>
-            </li>
-            <li>
-                <a href="<?php echo SITE_URL; ?>/admissions.php" class="sub-menu-link <?php echo ($current_page === 'admissions.php') ? 'active' : ''; ?>">ADMISSIONS</a>
-            </li>
-            <li>
-                <a href="<?php echo SITE_URL; ?>/about.php" class="sub-menu-link <?php echo ($current_page === 'about.php') ? 'active' : ''; ?>">ABOUT SRMS</a>
-                <ul class="drop-down">
-                    <li><a href="<?php echo SITE_URL; ?>/alumni.php">ALUMNI</a></li>
-                    <li><a href="<?php echo SITE_URL; ?>/faculty.php">FACULTY</a></li>
-                </ul>
-            </li>
-            <li>
-                <a href="#" class="sub-menu-link <?php echo (strpos($current_url, 'academics/') !== false) ? 'active' : ''; ?>">ACADEMICS</a>
-                <ul class="drop-down">
-                    <?php 
-                    // Get academic levels from database
-                    $levels = $db->fetch_all("SELECT * FROM academic_levels ORDER BY display_order ASC");
-                    foreach ($levels as $level):
-                        $active_class = ($academic_level === $level['slug']) ? 'active' : '';
-                    ?>
-                    <li>
-                        <a href="<?php echo SITE_URL; ?>/academics/<?php echo $level['slug']; ?>.php">
-                            <?php echo strtoupper($level['name']); ?>
-                        </a>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-            </li>
-            <li>
-                <a href="<?php echo SITE_URL; ?>/news.php" class="sub-menu-link <?php echo ($current_page === 'news.php' || $current_page === 'news-detail.php') ? 'active' : ''; ?>">NEWS</a>
-            </li>
-            <li>
-                <a href="<?php echo SITE_URL; ?>/contact.php" class="sub-menu-link <?php echo ($current_page === 'contact.php') ? 'active' : ''; ?>">CONTACT</a>
-            </li>
+            <?php foreach ($navigation as $item): ?>
+                <?php 
+                    // Check if current page matches this menu item
+                    $is_active = ($current_page === basename($item['url'])) || 
+                                 (strpos($current_url, dirname($item['url'])) !== false && basename($item['url']) === '#');
+                ?>
+                <li>
+                    <a href="<?php echo SITE_URL . $item['url']; ?>" class="sub-menu-link <?php echo $is_active ? 'active' : ''; ?>">
+                        <?php echo htmlspecialchars($item['name']); ?>
+                    </a>
+                    
+                    <?php if (!empty($item['children'])): ?>
+                        <ul class="drop-down">
+                            <?php foreach ($item['children'] as $child): ?>
+                                <?php 
+                                    // Special handling for academic items to detect active state
+                                    $child_is_active = (strpos($item['name'], 'ACADEMICS') !== false && 
+                                                       basename($child['url'], '.php') === $academic_level);
+                                ?>
+                                <li>
+                                    <?php if ($child['url'] && $child['url'] !== '#'): ?>
+                                        <a href="<?php echo SITE_URL . $child['url']; ?>" <?php echo $child_is_active ? 'class="active"' : ''; ?>>
+                                            <?php echo htmlspecialchars($child['name']); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <?php echo htmlspecialchars($child['name']); ?>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
         </ul>
     </header>

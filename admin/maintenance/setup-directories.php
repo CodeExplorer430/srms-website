@@ -17,8 +17,15 @@ $debug_info[] = "Document Root: " . $_SERVER['DOCUMENT_ROOT'];
 $debug_info[] = "Script Path: " . __DIR__;
 $debug_info[] = "Server Software: " . $_SERVER['SERVER_SOFTWARE'];
 
-// IMPORTANT FIX: Explicitly set project folder name
-$project_folder = 'srms-website';
+// IMPORTANT: Extract project folder from SITE_URL
+$project_folder = '';
+if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+    $project_folder = $matches[1]; // Should be "srms-website"
+} else {
+    $project_folder = 'srms-website'; // Fallback default
+}
+
+$debug_info[] = "Project Folder: " . $project_folder;
 
 // Get the correct base path that includes the project folder
 function get_base_path() {
@@ -42,21 +49,33 @@ function get_base_path() {
     }
 }
 
+// Explicitly set the directory structure using constants for consistency
+define('PROJECT_DIR', get_base_path());
+define('ASSETS_DIR', PROJECT_DIR . (IS_WINDOWS ? '\\assets' : '/assets'));
+define('IMAGES_DIR', ASSETS_DIR . (IS_WINDOWS ? '\\images' : '/images'));
+define('UPLOADS_DIR', ASSETS_DIR . (IS_WINDOWS ? '\\uploads' : '/uploads'));
+
+// Log the defined paths for debugging
+$debug_info[] = "PROJECT_DIR: " . PROJECT_DIR;
+$debug_info[] = "ASSETS_DIR: " . ASSETS_DIR;
+$debug_info[] = "IMAGES_DIR: " . IMAGES_DIR;
+$debug_info[] = "UPLOADS_DIR: " . UPLOADS_DIR;
+
 // Resolve a relative path to the full path including project folder
 function get_proper_path($relative_path) {
-    $base_path = get_base_path();
+    global $project_folder;
     
     // Normalize path separators for the current OS
     if (IS_WINDOWS) {
         $relative_path = str_replace('/', '\\', $relative_path);
-        return $base_path . $relative_path;
+        return PROJECT_DIR . $relative_path;
     } else {
         $relative_path = str_replace('\\', '/', $relative_path);
-        return $base_path . $relative_path;
+        return PROJECT_DIR . $relative_path;
     }
 }
 
-// Required directories
+// Required directories - using relative paths for cleaner code
 $directories = [
     '/assets/images/news',
     '/assets/images/events',
@@ -64,6 +83,7 @@ $directories = [
     '/assets/images/facilities',
     '/assets/images/campus',
     '/assets/images/people',
+    '/assets/images/branding', // Added branding directory for consistency
     '/assets/uploads/temp'
 ];
 
@@ -86,6 +106,9 @@ foreach ($directories as $dir) {
     if (!is_dir($full_path)) {
         // Use appropriate permissions based on OS
         $permissions = IS_WINDOWS ? 0777 : 0777;
+        
+        // Log the path we're trying to create
+        error_log("Attempting to create directory: " . $full_path);
         
         // Create the directory with full permissions
         $created = @mkdir($full_path, $permissions, true);
@@ -309,28 +332,30 @@ foreach ($placeholder_images as $path => $url) {
     <div class="code-block">
         <h3>Windows (XAMPP) Commands:</h3>
         <pre>
-mkdir C:\xampp\htdocs\srms-website\assets\images\news
-mkdir C:\xampp\htdocs\srms-website\assets\images\events
-mkdir C:\xampp\htdocs\srms-website\assets\images\promotional
-mkdir C:\xampp\htdocs\srms-website\assets\images\facilities
-mkdir C:\xampp\htdocs\srms-website\assets\images\campus
-mkdir C:\xampp\htdocs\srms-website\assets\images\people
-mkdir C:\xampp\htdocs\srms-website\assets\uploads\temp
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\news"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\events"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\promotional"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\facilities"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\campus"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\people"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\images\branding"
+mkdir "C:\xampp\htdocs\<?php echo htmlspecialchars($project_folder); ?>\assets\uploads\temp"
 </pre>
     </div>
 
     <div class="code-block">
         <h3>Linux (XAMPP) Commands:</h3>
         <pre>
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/news
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/events
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/promotional
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/facilities
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/campus
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/images/people
-sudo mkdir -p /opt/lampp/htdocs/srms-website/assets/uploads/temp
-sudo chmod -R 777 /opt/lampp/htdocs/srms-website/assets
-sudo chown -R daemon:daemon /opt/lampp/htdocs/srms-website/assets
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/news
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/events
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/promotional
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/facilities
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/campus
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/people
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/images/branding
+sudo mkdir -p /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets/uploads/temp
+sudo chmod -R 777 /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets
+sudo chown -R daemon:daemon /opt/lampp/htdocs/<?php echo htmlspecialchars($project_folder); ?>/assets
 </pre>
     </div>
     

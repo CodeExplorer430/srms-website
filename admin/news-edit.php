@@ -86,35 +86,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Process image upload first
     if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] != UPLOAD_ERR_NO_FILE) {
+        // Log the upload attempt
+        error_log('News Edit: Processing image upload for file: ' . $_FILES['image_upload']['name']);
+        
         $upload_result = upload_image($_FILES['image_upload'], $destination_folder);
         if ($upload_result) {
             // Use the new image path immediately
             $image = $upload_result;
             
-            // Ensure path is properly formatted for web display
-            $image = str_replace('\\', '/', $image);
-            
-            // Make sure path starts with a slash
-            if (strpos($image, '/') !== 0) {
-                $image = '/' . $image;
-            }
+            // Normalize the path for display/storage
+            $image = normalize_image_path($image);
             
             // Add a small delay to ensure file is written to disk
             usleep(500000); // 0.5 second delay
             
-            // Flush file cache to ensure file existence checks work
-            clearstatcache(true, $_SERVER['DOCUMENT_ROOT'] . $image);
+            // Clear file caches
+            clearstatcache();
             
-            // Log the successful upload
-            error_log("File uploaded successfully to: " . $image);
+            // Verify the uploaded file exists
+            if (verify_image_exists($image)) {
+                error_log("News Edit: Verified uploaded image exists at path: {$image}");
+            } else {
+                error_log("News Edit: WARNING - Uploaded image not found at path: {$image}");
+                $warnings[] = "Image was uploaded successfully but verification check failed. The image may not display correctly.";
+            }
         } else {
-            $errors[] = 'Image upload failed. Please check file type and size.';
+            $errors[] = 'Image upload failed. Please check file type, size, and server permissions.';
         }
     }
 
     // Normalize the manually entered image path if no upload
     if (empty($upload_result) && isset($_POST['image'])) {
-        $image = normalize_image_path($_POST['image']);
+        $original_path = $_POST['image'];
+        $image = normalize_image_path($original_path);
+        error_log("News Edit: Normalized image path from '{$original_path}' to '{$image}'");
     }
     
     // Verify image path exists
@@ -324,7 +329,7 @@ ob_start();
                             <span>No image selected</span>
                             <small>Select from media library or upload a new image</small>
                         </div>
-                        <img src="<?php echo !empty($image) ? htmlspecialchars($image) : ''; ?>" 
+                        <img src="<?php echo !empty($image) ? htmlspecialchars(get_display_url($image)) : ''; ?>" 
                             alt="Preview" 
                             id="preview-image" 
                             style="<?php echo empty($image) ? 'display: none;' : ''; ?>">
@@ -340,24 +345,36 @@ ob_start();
             </div>
             
             <?php if (!empty($image)): 
-                // More comprehensive image verification
+                 // More comprehensive image verification
                 $server_root = $_SERVER['DOCUMENT_ROOT'];
                 $image_full_path = $server_root . $image;
-                $image_exists = file_exists($image_full_path);
-                $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($image, '/');
-                $alt_exists = file_exists($alt_path);
-                $best_match = find_best_matching_image($image);
+                
+                // Get project folder
+                $project_folder = '';
+                if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+                    $project_folder = $matches[1]; // "srms-website"
+                }
+                
+                // Try with project folder
+                $path_with_project = $server_root . DIRECTORY_SEPARATOR . $project_folder . str_replace('/', DIRECTORY_SEPARATOR, $image);
+                
+                // Check both paths
+                $image_exists = file_exists($image_full_path) || file_exists($path_with_project);
+                $best_match = $image_exists ? '' : find_best_matching_image($image);
             ?>
-                <div class="image-verification <?php echo ($image_exists || $alt_exists) ? 'success' : 'error'; ?>">
-                    <?php if ($image_exists || $alt_exists): ?>
+                <div class="image-verification <?php echo ($image_exists || $best_match) ? 'success' : 'error'; ?>">
+                    <?php if ($image_exists): ?>
                         <i class='bx bx-check-circle'></i> Image file exists at this path
                     <?php elseif ($best_match): ?>
                         <i class='bx bx-check-circle'></i> Similar image found at: <?php echo htmlspecialchars($best_match); ?>
                     <?php else: ?>
                         <i class='bx bx-x-circle'></i> Image file not found at this path
                         <div class="path-details">
-                            Tried: <?php echo htmlspecialchars($image_full_path); ?><br>
-                            And: <?php echo htmlspecialchars($alt_path); ?>
+                            Tried paths:
+                            <ul>
+                                <li><?php echo htmlspecialchars($image_full_path); ?></li>
+                                <li><?php echo htmlspecialchars($path_with_project); ?></li>
+                            </ul>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -441,6 +458,33 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+
+// Function to convert relative path to full URL
+function getImageUrl(path) {
+    // If already a full URL, return as is
+    if (path.startsWith('http')) return path;
+    
+    // Get current URL components
+    const baseUrl = window.location.origin;
+    const projectFolder = window.location.pathname.split('/')[1];
+    
+    // Ensure path starts with a slash
+    path = path.startsWith('/') ? path : '/' + path;
+    
+    // Return full URL
+    return baseUrl + '/' + projectFolder + path;
+}
+
+// Patch the global UnifiedImageUploader.selectMediaItem
+if (window.UnifiedImageUploader) {
+    const originalSelectMediaItem = window.UnifiedImageUploader.selectMediaItem;
+    
+    window.UnifiedImageUploader.selectMediaItem = function(path) {
+        // Call original function for database storage
+        // But pass a second parameter with the display URL
+        originalSelectMediaItem(path, getImageUrl(path));
+    };
+}
 </script>
 
 <?php

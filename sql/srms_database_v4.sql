@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3308
--- Generation Time: May 18, 2025 at 05:43 AM
+-- Generation Time: May 18, 2025 at 11:47 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -231,9 +231,9 @@ CREATE TABLE `facilities` (
 --
 
 INSERT INTO `facilities` (`id`, `name`, `description`, `image`, `display_order`, `created_at`, `updated_at`) VALUES
-(1, 'LIBRARY', 'Our school library is a welcoming space designed to inspire lifelong learning. With a wide array of resources and services, it plays an essential role in supporting the academic and personal growth of every student.', '/images/School_Library.jpg', 1, '2025-04-24 21:11:15', '2025-04-24 21:11:15'),
-(2, 'GYMNASIUM', 'With top-tier facilities and a wide range of activities, our gymnasium is dedicated to fostering a passion for sports and wellness in all of our students. It\'s a place where students can grow stronger, work as a team, and develop skills that will last a lifetime.', '/images/School_Gymnasium.jpg', 2, '2025-04-24 21:11:15', '2025-04-24 21:11:15'),
-(3, 'CANTEEN', 'Our school canteen is not just about food; it\'s about creating a positive and healthy environment where students can enjoy nutritious meals, interact with friends, and recharge for the rest of their day.', '/images/School_Canteen.jpg', 3, '2025-04-24 21:11:15', '2025-04-24 21:11:15');
+(1, 'LIBRARY', 'Our school library is a welcoming space designed to inspire lifelong learning. With a wide array of resources and services, it plays an essential role in supporting the academic and personal growth of every student.', '/assets/images/facilities/library-1746261509.jpg', 1, '2025-04-24 21:11:15', '2025-05-18 09:12:32'),
+(2, 'GYMNASIUM', 'With top-tier facilities and a wide range of activities, our gymnasium is dedicated to fostering a passion for sports and wellness in all of our students. It\'s a place where students can grow stronger, work as a team, and develop skills that will last a lifetime.', '/assets/images/facilities/gymnasium-1746261509.jpg', 2, '2025-04-24 21:11:15', '2025-05-18 09:12:46'),
+(3, 'CANTEEN', 'Our school canteen is not just about food; it\'s about creating a positive and healthy environment where students can enjoy nutritious meals, interact with friends, and recharge for the rest of their day.', '/assets/images/facilities/canteen-1746261509.jpg', 3, '2025-04-24 21:11:15', '2025-05-18 09:13:03');
 
 -- --------------------------------------------------------
 
@@ -482,6 +482,20 @@ CREATE TABLE `page_content` (
   `last_updated_by` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Dumping data for table `page_content`
+--
+
+INSERT INTO `page_content` (`id`, `page_key`, `title`, `content`, `meta_description`, `last_updated`, `last_updated_by`) VALUES
+(1, 'home', 'Home', '<section class=\"enr\"><h6>ST. RAPHAELA MARY SCHOOL</h6><p>Welcome Raphaelians!</p></section>', 'Welcome to the official website of St. Raphaela Mary School', '2025-05-18 09:04:18', 1),
+(2, 'about', 'About SRMS', '<div class=\"about-header\"><h2>About SMRS</h2></div><h3>Welcome to St. Raphaela Mary School!</h3>', 'Learn about the history, mission, vision, and philosophy of St. Raphaela Mary School', '2025-05-18 09:04:18', 1),
+(3, 'admissions', 'Admissions', '<section class=\"header\"><div class=\"line-title1\"><p>ST. RAPHAELA MARY SCHOOL</p></div><div class=\"line-title2\"><h1>ENROLLMENT POLICIES AND PROCEDURES</h1></div></section>', 'Information about enrollment policies, procedures, and requirements at St. Raphaela Mary School', '2025-05-18 09:04:18', 1),
+(4, 'contact', 'Contact', '<section><h1>CONTACT US</h1></section>', 'Get in touch with St. Raphaela Mary School for inquiries or concerns', '2025-05-18 09:04:18', 1),
+(5, 'faculty', 'Faculty and Staff', '<section class=\"main-head\"><h1>FACULTY AND PERSONNEL ROSTER</h1></section>', 'Meet the dedicated faculty and staff of St. Raphaela Mary School', '2025-05-18 09:04:18', 1),
+(6, 'senior-high', 'Senior High School', '<div class=\"lvl-grade\"><h1>Senior High School</h1></div>', 'Information about the Senior High School program at St. Raphaela Mary School', '2025-05-18 09:04:18', 1),
+(7, 'news', 'News', '<section class=\"main-title\"><h2>SMRS NEWS UPDATES</h2></section>', 'Stay updated with the latest news and announcements from St. Raphaela Mary School', '2025-05-18 09:04:18', 1),
+(8, 'alumni', 'Alumni Association', '', 'Connect with the St. Raphaela Mary School alumni community. Discover alumni events, achievements, and ways to stay connected.', '2025-05-18 09:06:36', 1);
+
 -- --------------------------------------------------------
 
 --
@@ -496,6 +510,24 @@ CREATE TABLE `page_sections` (
   `content` text DEFAULT NULL,
   `display_order` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `page_sections`
+--
+
+INSERT INTO `page_sections` (`id`, `page_id`, `section_key`, `title`, `content`, `display_order`) VALUES
+(1, 1, 'main_content', 'Home', '<section class=\"enr\"><h6>ST. RAPHAELA MARY SCHOOL</h6><p>Welcome Raphaelians!</p></section>', 0),
+(2, 2, 'main_content', 'About SRMS', '<div class=\"about-header\"><h2>About SMRS</h2></div><h3>Welcome to St. Raphaela Mary School!</h3>', 0),
+(3, 3, 'main_content', 'Admissions', '<section class=\"header\"><div class=\"line-title1\"><p>ST. RAPHAELA MARY SCHOOL</p></div><div class=\"line-title2\"><h1>ENROLLMENT POLICIES AND PROCEDURES</h1></div></section>', 0),
+(4, 4, 'main_content', 'Contact', '<section><h1>CONTACT US</h1></section>', 0),
+(5, 5, 'main_content', 'Faculty and Staff', '<section class=\"main-head\"><h1>FACULTY AND PERSONNEL ROSTER</h1></section>', 0),
+(6, 6, 'main_content', 'Senior High School', '<div class=\"lvl-grade\"><h1>Senior High School</h1></div>', 0),
+(7, 7, 'main_content', 'News', '<section class=\"main-title\"><h2>SMRS NEWS UPDATES</h2></section>', 0),
+(8, 8, 'welcome', 'Welcome', 'The St. Raphaela Mary School Alumni Association connects graduates from all generations, fostering lifelong relationships and supporting our alma mater. We invite all alumni to stay connected, participate in events, and give back to the school community.', 1),
+(9, 8, 'benefits', 'Alumni Benefits', '- **Networking Opportunities:** Connect with fellow graduates for professional development and social connections\n- **School Events:** Special invitations to school functions and reunions\n- **Giving Back:** Opportunities to mentor current students and support scholarship programs\n- **Recognition:** Celebrate alumni achievements and contributions to society', 2),
+(10, 8, 'events', 'Upcoming Alumni Events', '**Annual Homecoming 2025**\nDate: July 15, 2025\nLocation: SRMS Gymnasium\nJoin us for a day of reminiscing, reconnecting, and celebrating your Raphaelian roots. Special recognition for milestone anniversary batches (Classes of 1975, 1985, 1995, 2005, 2015).\n\n**Career Mentorship Day**\nDate: September 5, 2025\nLocation: SRMS Auditorium\nShare your professional journey and insights with current senior high school students. Help shape the future of our younger Raphaelians!', 3),
+(11, 8, 'registration', 'Join the Alumni Network', 'We\'re building a comprehensive database of our alumni. Please take a moment to register or update your information.', 4),
+(12, 8, 'contact', 'Contact the Alumni Association', 'For inquiries about alumni activities, reunions, or how to get involved:\n\n**Email:** alumni@srms.edu.ph\n**Social Media:** Follow us on Facebook', 5);
 
 -- --------------------------------------------------------
 
@@ -568,9 +600,9 @@ CREATE TABLE `slideshow` (
 --
 
 INSERT INTO `slideshow` (`id`, `image`, `caption`, `link`, `display_order`, `is_active`) VALUES
-(1, '/assets/images/campus/hero-main.jpg', 'St. Raphaela Mary School Campus', NULL, 1, 1),
-(2, '/assets/images/promotional/senior-high-free.jpg', 'Free Senior High School Education', 'admissions.php', 2, 1),
-(3, '/assets/images/campus/overview.jpg', 'School Activities', NULL, 3, 1);
+(1, '/assets/images/campus/hero-background-1746261656.jpg', 'St. Raphaela Mary School Campus', '', 1, 1),
+(2, '/assets/images/promotional/senior-high-free-1746261609.jpg', 'Free Senior High School Education', 'admissions.php', 2, 1),
+(3, '/assets/images/campus/overview-1746261656.jpg', 'School Activities', '', 3, 1);
 
 -- --------------------------------------------------------
 
@@ -660,7 +692,7 @@ INSERT INTO `users` (`id`, `username`, `password`, `email`, `role`, `active`, `l
 (2, 'content_editor', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'content@srms.edu.ph', 'editor', 1, '2025-04-25 05:11:15', '2025-04-24 21:11:15', '2025-04-24 21:11:15'),
 (3, 'jidello', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'jidello@srms.edu.ph', 'editor', 1, '2025-04-25 05:11:15', '2025-04-24 21:11:15', '2025-04-24 21:11:15'),
 (4, 'jquevedo', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'jquevedo@srms.edu.ph', 'admin', 0, '2025-04-25 05:11:15', '2025-04-24 21:11:15', '2025-04-27 03:38:50'),
-(7, 'admin1', '$2a$12$CD/0iENYIDhWcCE94OgGh.cvTWXGgoDuemxbwzeC9GhuJsXL6j/OC', 'admin1@srms.edu.ph', 'admin', 1, '2025-05-18 10:13:54', '2025-04-24 22:23:11', '2025-05-18 02:13:54'),
+(7, 'admin1', '$2a$12$CD/0iENYIDhWcCE94OgGh.cvTWXGgoDuemxbwzeC9GhuJsXL6j/OC', 'admin1@srms.edu.ph', 'admin', 1, '2025-05-18 17:08:38', '2025-04-24 22:23:11', '2025-05-18 09:08:38'),
 (9, 'rodneybagay', '$2y$10$o0fkR58GY6z3jZDKwDmLT.pVQiAVWwvmsBf987N1L3B4KBCtDZRE.', 'rodneybagay@srms.edu.ph', 'editor', 1, NULL, '2025-05-06 07:30:19', '2025-05-06 07:30:55');
 
 --
@@ -951,13 +983,13 @@ ALTER TABLE `pages`
 -- AUTO_INCREMENT for table `page_content`
 --
 ALTER TABLE `page_content`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `page_sections`
 --
 ALTER TABLE `page_sections`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `school_goals`

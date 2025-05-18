@@ -705,97 +705,158 @@ function image_exists($image_path) {
 }
 
 /**
- * Check if file exists, allowing for some flexibility in path formats
- * and case-sensitive filesystems.
- *
- * @param string $image_path Path to check
- * @return bool True if file exists
+ * Enhanced file existence check with multiple path options
  */
 function file_exists_with_alternatives($image_path) {
-    $server_root = $_SERVER['DOCUMENT_ROOT'];
-    
-    // Try direct path
-    if (file_exists($server_root . $image_path)) {
-        return true;
-    }
-    
-    // Try with and without leading slash
-    $alt_path = $server_root . DIRECTORY_SEPARATOR . ltrim($image_path, '/');
-    if (file_exists($alt_path)) {
-        return true;
-    }
-    
-    // Try different case variations (useful on case-sensitive filesystems)
-    $basename = basename($image_path);
-    $dirname = dirname($image_path);
-    
-    if (is_dir($server_root . $dirname)) {
-        $files = scandir($server_root . $dirname);
-        foreach ($files as $file) {
-            if (strtolower($file) === strtolower($basename)) {
-                return true;
-            }
-        }
-    }
-    
-    return false;
+    // Simply use the more comprehensive verify_image_exists function
+    return verify_image_exists($image_path);
 }
 
 /**
- * Normalize image path for cross-platform compatibility
+ * Get correct image URL with project folder considered
+ * This ensures images are properly found regardless of path storage method
+ * 
+ * @param string $image_path Image path from database
+ * @return string Full, correct URL
+ */
+function get_correct_image_url($image_path) {
+    if (empty($image_path)) return '';
+    
+    // Normalize path first (remove duplicate slashes, etc)
+    $path = normalize_image_path($image_path);
+    
+    // Get project folder name from SITE_URL
+    $project_folder = '';
+    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // Should be "srms-website"
+    }
+    
+    // Force use of the project folder in final URL
+    return SITE_URL . $path;
+}
+
+/**
+ * Enhanced normalize_image_path function that works consistently across environments
+ * 
+ * @param string $path Path to normalize
+ * @return string Normalized path
  */
 function normalize_image_path($path) {
     if (empty($path)) return '';
     
-    // If it's a URL, leave it unchanged
-    if (filter_var($path, FILTER_VALIDATE_URL)) return $path;
+    // If it's a URL, extract just the path part
+    if (filter_var($path, FILTER_VALIDATE_URL)) {
+        $path = parse_url($path, PHP_URL_PATH);
+    }
     
-    // Ensure path starts with slash
-    $path = '/' . ltrim($path, '/');
+    // Get project folder from SITE_URL
+    $project_folder = '';
+    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // "srms-website"
+    }
     
-    // Convert backslashes to forward slashes (for Windows paths)
-    $path = str_replace('\\', '/', $path);
+    // Remove project folder prefix if present (to prevent duplication)
+    if (!empty($project_folder) && stripos($path, '/' . $project_folder . '/') === 0) {
+        $path = substr($path, strlen('/' . $project_folder));
+    }
+    
+    // Ensure path starts with slash and uses forward slashes
+    $path = '/' . ltrim(str_replace('\\', '/', $path), '/');
     
     // Clean up double slashes
-    return preg_replace('#/+#', '/', $path);
+    $path = preg_replace('#/+#', '/', $path);
+    
+    return $path;
 }
 
 /**
- * Enhanced file existence check for cross-platform compatibility
+ * Improved cross-platform image existence verification
+ * Specifically designed to work with media library paths
+ */
+/**
+ * Improved cross-platform image existence verification that works consistently with project folder
  */
 function verify_image_exists($image_path) {
     if (empty($image_path)) return false;
     
-    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    // Normalize spaces and hyphens in the path
+    $image_path = str_replace(" ", "-", $image_path);
     $image_path = normalize_image_path($image_path);
     
-    // Try multiple path variations
-    $paths_to_check = [
-        $server_root . $image_path,
-        $server_root . DIRECTORY_SEPARATOR . ltrim($image_path, '/'),
-        rtrim($server_root, '/\\') . $image_path
+    // Get server root and project folder information
+    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    
+    // Always use srms-website as the project folder
+    $project_folder = 'srms-website';
+    
+    // Most important path - with project folder (primary path to check)
+    $primary_path = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
+                   str_replace('/', DIRECTORY_SEPARATOR, $image_path);
+    
+    // Log for debugging
+    error_log("Primary image path check: $primary_path");
+    
+    // Check primary path first (with project folder - most likely correct path)
+    if (file_exists($primary_path)) {
+        error_log("Image found at primary path: $primary_path");
+        return true;
+    }
+    
+    // Additional paths to try if primary fails
+    $alt_paths = [
+        // Path without project folder (less likely)
+        $server_root . str_replace('/', DIRECTORY_SEPARATOR, $image_path),
+        
+        // Other variations including handling spaces vs hyphens
+        str_replace(['-'], [' '], $primary_path),
+        str_replace('-', ' ', $server_root . str_replace('/', DIRECTORY_SEPARATOR, $image_path))
     ];
     
-    foreach ($paths_to_check as $path) {
+    // Try all alternative paths
+    foreach ($alt_paths as $index => $path) {
+        error_log("Trying alternative path $index: $path");
         if (file_exists($path)) {
+            error_log("Image found at alternative path: $path");
             return true;
         }
     }
     
-    // Additional check: Try to find case-insensitive match (for Linux)
-    $dir = dirname($server_root . $image_path);
-    $filename = basename($image_path);
-    
-    if (is_dir($dir)) {
-        $files = scandir($dir);
-        foreach ($files as $file) {
-            if (strcasecmp($file, $filename) === 0) {
-                return true;
-            }
+    // Special handling for Windows paths with either slashes
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        // Try with backslashes
+        $win_path = str_replace('/', '\\', $primary_path);
+        error_log("Trying Windows path: $win_path");
+        if (file_exists($win_path)) {
+            error_log("Image found at Windows path: $win_path");
+            return true;
         }
     }
     
+    error_log("Image not found in any location: $image_path");
     return false;
+}
+
+/**
+ * Convert a database image path to a full URL for display
+ * Fixed to always use the correct project folder
+ */
+function get_display_url($path) {
+    // If empty, return empty
+    if (empty($path)) return '';
+    
+    // Normalize path
+    $path = normalize_image_path($path);
+    
+    // If already a full URL, return as is
+    if (filter_var($path, FILTER_VALIDATE_URL)) {
+        return $path;
+    }
+    
+    // Get base URL parts (protocol + domain)
+    $base_url = substr(SITE_URL, 0, strpos(SITE_URL, '/', 8));
+    
+    // Always use srms-website as the project folder for display URLs
+    return $base_url . '/srms-website' . $path;
 }
 
 /**
@@ -874,7 +935,7 @@ function create_directory($dir, $recursive = true) {
 }
 
 /**
- * Upload image to specified category directory
+ * Upload image to specified category directory with consistent path handling
  * 
  * @param array $file The $_FILES array element for the uploaded file
  * @param string $category The category directory to store the file in
@@ -882,7 +943,7 @@ function create_directory($dir, $recursive = true) {
  */
 function upload_image($file, $category = 'news') {
     // Log upload attempt for debugging
-    error_log("Upload attempt for category: {$category}, file type: {$file['type']}, size: {$file['size']}");
+    error_log("Upload attempt for category: {$category}, file: {$file['name']}");
 
     // Validate file type
     $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
@@ -897,11 +958,22 @@ function upload_image($file, $category = 'news') {
         return false;
     }
     
-    // Normalize target directory path - ALWAYS use forward slashes for web paths
-    $target_dir = $_SERVER['DOCUMENT_ROOT'] . '/assets/images/' . $category . '/';
-    $target_dir = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $target_dir);
+    // Get document root
+    $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
     
-    // Create target directory if it doesn't exist
+    // ALWAYS use srms-website as the project folder
+    $project_folder = 'srms-website';
+    
+    // Build target directory path with project folder ALWAYS included
+    $target_dir = $doc_root . DIRECTORY_SEPARATOR . $project_folder . 
+                 DIRECTORY_SEPARATOR . 'assets' . 
+                 DIRECTORY_SEPARATOR . 'images' . 
+                 DIRECTORY_SEPARATOR . $category;
+    
+    // Debug log
+    error_log("Upload target directory: {$target_dir}");
+    
+    // Create directory if it doesn't exist
     if (!is_dir($target_dir)) {
         error_log("Creating directory: {$target_dir}");
         if (!mkdir($target_dir, 0755, true)) {
@@ -912,9 +984,7 @@ function upload_image($file, $category = 'news') {
     
     // Generate unique filename
     $filename = pathinfo($file['name'], PATHINFO_FILENAME);
-    // Sanitize filename - remove spaces and special characters
     $filename = preg_replace('/[^a-zA-Z0-9_-]/', '', $filename);
-    // If filename is empty after sanitization, use a default name
     if (empty($filename)) {
         $filename = 'image';
     }
@@ -922,28 +992,30 @@ function upload_image($file, $category = 'news') {
     $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     $unique_name = $filename . '-' . time() . '.' . $extension;
     
-    // Set target path using system-specific directory separator
-    $target_path = $target_dir . $unique_name;
+    // Target path for the file system
+    $target_path = $target_dir . DIRECTORY_SEPARATOR . $unique_name;
     
-    // ALWAYS use forward slashes for web paths, regardless of OS
+    // Path for web/database storage (always use forward slashes)
     $relative_path = '/assets/images/' . $category . '/' . $unique_name;
-    $relative_path = str_replace('\\', '/', $relative_path);
     
-    // Upload file
+    // Log the actual paths being used
+    error_log("File upload - Target path: {$target_path}");
+    error_log("File upload - Web path: {$relative_path}");
+    
     if (move_uploaded_file($file['tmp_name'], $target_path)) {
-        // Fix permissions
         chmod($target_path, 0644);
         
-        // Verify file exists after upload
+        // Double-check file existence after upload
         if (!file_exists($target_path)) {
-            error_log("CRITICAL: File was moved but doesn't exist at: {$target_path}");
-            return false;
+            error_log("WARNING: File uploaded but not found at expected location: {$target_path}");
+        } else {
+            error_log("File upload successful and verified at: {$target_path}");
         }
         
         return $relative_path;
     } else {
         $error = error_get_last();
-        error_log("Failed to move uploaded file to {$target_path}: " . ($error ? $error['message'] : 'Unknown error'));
+        error_log("Upload failed: " . ($error ? $error['message'] : 'Unknown error'));
         return false;
     }
 }
@@ -1080,26 +1152,57 @@ function enhanced_file_exists($path) {
 }
 
 /**
- * Convert a filesystem path to a web-friendly URL path
+ * Convert a filesystem path to a web-friendly URL path with project folder support
  * 
  * @param string $path File system path
+ * @param bool $include_project_folder Whether to include the project folder
  * @return string Web URL path
  */
-function filesystem_path_to_url($path) {
+function filesystem_path_to_url($path, $include_project_folder = true) {
+    if (empty($path)) return '';
+    
     // Replace backslashes with forward slashes
     $path = str_replace('\\', '/', $path);
     
     // Remove any double slashes
     $path = preg_replace('#/+#', '/', $path);
     
-    // Remove document root from path to get web path
-    $doc_root = str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT']);
-    if (strpos($path, $doc_root) === 0) {
+    // Get document root with consistent slashes
+    $doc_root = str_replace('\\', '/', rtrim($_SERVER['DOCUMENT_ROOT'], '/\\'));
+    
+    // Determine project folder from SITE_URL
+    $project_folder = '';
+    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // Should be "srms-website"
+    }
+    
+    // Project path with consistent slashes
+    $project_path = $doc_root;
+    if (!empty($project_folder)) {
+        $project_path .= '/' . $project_folder;
+    }
+    
+    // Remove document root and possibly project folder from path
+    if (strpos($path, $project_path) === 0) {
+        // Path includes project folder, remove project path
+        $path = substr($path, strlen($project_path));
+    } else if (strpos($path, $doc_root) === 0) {
+        // Path doesn't include project folder, remove doc root
         $path = substr($path, strlen($doc_root));
     }
     
     // Ensure path starts with a single slash
     $path = '/' . ltrim($path, '/');
+    
+    // Add project folder if needed and requested
+    if ($include_project_folder && !empty($project_folder)) {
+        // Only add project folder if it doesn't start with it already
+        // and path isn't already a full URL
+        if (strpos($path, '/' . $project_folder . '/') !== 0 && 
+            !preg_match('#^https?://#', $path)) {
+            $path = '/' . $project_folder . $path;
+        }
+    }
     
     return $path;
 }
