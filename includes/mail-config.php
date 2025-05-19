@@ -11,6 +11,7 @@ defined('MAIL_USERNAME') or define('MAIL_USERNAME', 'miguel.velasco.dev@gmail.co
 defined('MAIL_PASSWORD') or define('MAIL_PASSWORD', 'fvpo wooi jkzw dlra ');     // Your email password or app password
 defined('MAIL_FROM') or define('MAIL_FROM', 'srms.edu.ph@gmail.com');      // From email address
 defined('MAIL_FROM_NAME') or define('MAIL_FROM_NAME', 'St. Raphaela Mary School');  // From name
+defined('MAIL_REPLY_TO') or define('MAIL_REPLY_TO', '');       // Reply-to email address (leave empty to use MAIL_FROM)
 defined('MAIL_ENCRYPTION') or define('MAIL_ENCRYPTION', 'tls');       // Encryption type (tls or ssl)
 defined('MAIL_DEBUG') or define('MAIL_DEBUG', 0);                // Debug level (0 = off, 1-4 for increasing verbosity)
 

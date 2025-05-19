@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin Tools Dashboard
+ * Admin Tools Dashboard (Updated for Email Tools Integration)
  * A centralized interface for all administrative and diagnostic tools
  */
 
@@ -36,6 +36,34 @@ $tool_categories = [
                 'description' => 'Debug file paths, directory structures, and URL configurations',
                 'icon' => 'bx-link',
                 'url' => 'system/path-diagnostics.php'
+            ]
+        ]
+    ],
+    'email' => [
+        'title' => 'Email Tools',
+        'description' => 'Configure email settings, test mail functionality, and manage email logs',
+        'icon' => 'bx-envelope',
+        'tools' => [
+            [
+                'id' => 'email-management',
+                'title' => 'Email Management',
+                'description' => 'Comprehensive interface for email configuration, testing, templates and logs',
+                'icon' => 'bx-mail-send',
+                'url' => 'email/email-tools.php'
+            ],
+            [
+                'id' => 'email-config',
+                'title' => 'Email Configuration',
+                'description' => 'Update SMTP settings and email preferences for the website',
+                'icon' => 'bx-cog',
+                'url' => 'email/email-config.php'
+            ],
+            [
+                'id' => 'email-logs',
+                'title' => 'Email Logs',
+                'description' => 'View and filter sent email history and verify delivery status',
+                'icon' => 'bx-list-ul',
+                'url' => 'email/email-logs.php'
             ]
         ]
     ],
