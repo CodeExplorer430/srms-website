@@ -431,8 +431,10 @@ ob_start();
                 <h3 class="modal-title" id="viewer-title">Image Title</h3>
                 <button type="button" class="modal-close" id="close-media-viewer">&times;</button>
             </div>
-            <div class="modal-body text-center">
-                <img src="" alt="Image Preview" class="img-fluid" id="viewer-image">
+            <div class="modal-body text-center viewer-modal-body">
+                <div class="image-container">
+                    <img src="" alt="Image Preview" class="img-fluid viewer-image" id="viewer-image">
+                </div>
                 <div class="mt-3">
                     <div class="media-path" id="viewer-path">/path/to/image.jpg</div>
                 </div>
@@ -771,6 +773,67 @@ ob_start();
             width: 100%;
         }
     }
+
+    /* Viewer Modal Image Scaling Fix */
+.viewer-modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.viewer-modal-body .image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-height: 50vh;
+    overflow: hidden;
+}
+
+.viewer-image {
+    max-width: 100%;
+    max-height: 50vh;
+    object-fit: contain;
+    margin: 0 auto;
+}
+
+/* Media path styling */
+.media-path {
+    font-family: monospace;
+    font-size: 14px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    margin-top: 10px;
+    word-break: break-all;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+/* Media Viewer Modal Responsive Fixes */
+@media (max-height: 768px) {
+    .viewer-modal-body {
+        max-height: 50vh;
+    }
+    
+    .viewer-modal-body .image-container {
+        max-height: 40vh;
+    }
+    
+    .viewer-image {
+        max-height: 40vh;
+    }
+}
+
+@media (max-width: 576px) {
+    .viewer-modal-body {
+        padding: 10px;
+    }
+    
+    .media-viewer-modal .modal-dialog {
+        margin: 10px;
+        width: 95%;
+    }
+}
 </style>
 
 <script>
@@ -1367,6 +1430,103 @@ ob_start();
         console.log("Final normalized path:", normalized);
         return normalized;
     }
+    
+    /**
+     * Media Viewer Modal Enhanced Script
+     * Handles proper scaling of images in the media viewer modal
+     */
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('Media Viewer fix script loaded');
+        
+        // Elements
+        const viewerModal = document.getElementById('media-viewer-modal');
+        const viewerImage = document.getElementById('viewer-image');
+        const closeViewer = document.getElementById('close-media-viewer');
+        const viewFullBtn = document.getElementById('view-full-btn');
+        
+        // Override the viewMedia function to add additional behaviors
+        window.viewMedia = function(path, name) {
+            // Set modal content
+            const viewerTitle = document.getElementById('viewer-title');
+            const viewerPath = document.getElementById('viewer-path');
+            
+            viewerTitle.textContent = name;
+            viewerPath.textContent = path;
+            window.currentImagePath = path;
+            
+            // Reset image dimensions before loading new image
+            viewerImage.style.width = '';
+            viewerImage.style.height = '';
+            
+            // Set image source
+            viewerImage.src = path;
+            
+            // Once image loads, check dimensions
+            viewerImage.onload = function() {
+                console.log(`Image loaded: ${this.naturalWidth}x${this.naturalHeight}`);
+                
+                // Add classes based on image dimensions
+                if (this.naturalWidth > this.naturalHeight) {
+                    viewerImage.classList.add('landscape');
+                    viewerImage.classList.remove('portrait');
+                } else {
+                    viewerImage.classList.add('portrait');
+                    viewerImage.classList.remove('landscape');
+                }
+                
+                // Apply optimized scaling method
+                applyOptimalScaling(this);
+            };
+            
+            // Show the modal
+            viewerModal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        };
+        
+        // Optimal scaling function
+        function applyOptimalScaling(image) {
+            const container = image.parentElement;
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            const imageRatio = image.naturalWidth / image.naturalHeight;
+            
+            console.log('Container dimensions:', containerWidth, containerHeight);
+            console.log('Image ratio:', imageRatio);
+            
+            // Let CSS handle the scaling through max-height and max-width
+            // No manual dimension setting needed
+        }
+        
+        // Close button event
+        if (closeViewer) {
+            closeViewer.addEventListener('click', function() {
+                viewerModal.style.display = 'none';
+                document.body.style.overflow = '';
+            });
+        }
+        
+        // Full size view button
+        if (viewFullBtn) {
+            viewFullBtn.addEventListener('click', function() {
+                window.open(viewerImage.src, '_blank');
+            });
+        }
+        
+        // Close when clicking outside content
+        window.addEventListener('click', function(e) {
+            if (e.target === viewerModal) {
+                viewerModal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        });
+        
+        // Handle window resize events
+        window.addEventListener('resize', function() {
+            if (viewerModal.style.display === 'block' && viewerImage.complete) {
+                applyOptimalScaling(viewerImage);
+            }
+        });
+    });
 </script>
 
 <?php

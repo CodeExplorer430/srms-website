@@ -28,6 +28,23 @@ $sections = [];
 $errors = [];
 $success = false;
 
+// Check for new=1 parameter and auto-populate page_key
+if (isset($_GET['new']) && $_GET['new'] == '1' && isset($_GET['key'])) {
+    $page_key = trim($_GET['key']);
+    
+    // Check if a page with this key already exists
+    $existing = $db->fetch_row("SELECT id FROM page_content WHERE page_key = '{$db->escape($page_key)}'");
+    
+    if ($existing) {
+        // Redirect to edit the existing page
+        header('Location: page-edit.php?id=' . $existing['id']);
+        exit;
+    }
+    
+    // Auto-populate title
+    $title = ucwords(str_replace('-', ' ', $page_key));
+}
+
 // Load page data if editing
 if ($id > 0) {
     $page = $db->fetch_row("SELECT * FROM page_content WHERE id = $id");

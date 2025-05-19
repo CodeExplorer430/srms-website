@@ -31,6 +31,9 @@ $db = new Database();
 // Get general school information
 $school_info = $db->fetch_row("SELECT * FROM school_information LIMIT 1");
 
+// Set the logo URL using the get_header_image_url function
+$logo_url = get_header_image_url($school_info['logo'] ?? '');
+
 // Get active status for nav items
 $current_page = basename($_SERVER['PHP_SELF']);
 $current_url = $_SERVER['REQUEST_URI'];
@@ -176,12 +179,8 @@ function get_header_image_url($path) {
     
     <header>
         <a href="<?php echo SITE_URL; ?>/index.php" class="logo">
-            <?php 
-            $logo_url = (!empty($school_info['logo'])) ? 
-                        get_header_image_url($school_info['logo']) : 
-                        SITE_URL . '/assets/images/branding/logo-primary.png'; 
-            ?>
-            <img src="<?php echo $logo_url; ?>" alt="<?php echo htmlspecialchars($school_info['name'] ?? 'St. Raphaela Mary School'); ?> Logo">
+            <img src="<?php echo $logo_url; ?>" alt="<?php echo htmlspecialchars($school_info['name'] ?? 'St. Raphaela Mary School'); ?> Logo" 
+                onerror="this.onerror=null; this.src='<?php echo SITE_URL; ?>/assets/images/branding/logo-primary.png'; console.log('Logo fallback used');">
         </a>
         
         <ul class="menu-link">

@@ -232,3 +232,70 @@ function adjustTableColumns() {
   window.addEventListener('load', adjustTableColumns);
   window.addEventListener('resize', adjustTableColumns);
 }
+
+/**
+ * Enhanced Image Path Handler for Media Library Integration
+ * Version: 1.0.0
+ */
+(function() {
+    console.log('Initializing Enhanced Image Path Handler');
+    
+    // Function to fix image paths when they fail to load
+    function setupImageErrorHandling() {
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get all images on the page
+            const images = document.querySelectorAll('img');
+            
+            // Add error handlers to each image
+            images.forEach(function(img) {
+                img.addEventListener('error', function() {
+                    // Only process images that aren't using the fallback already
+                    if (this.src.indexOf('logo-primary.png') === -1 && !this.hasAttribute('data-tried-fallback')) {
+                        console.log('Image failed to load:', this.src);
+                        
+                        // Extract project folder from current URL
+                        const urlParts = window.location.pathname.split('/');
+                        const projectFolder = urlParts[1] ? urlParts[1] : '';
+                        
+                        // Extract filename
+                        const pathParts = this.src.split('/');
+                        const filename = pathParts[pathParts.length - 1];
+                        
+                        console.log('Attempting fallback for:', filename);
+                        
+                        // Try different path combinations
+                        const origin = window.location.origin;
+                        const assetPath = '/assets/images/';
+                        const categories = ['branding', 'news', 'events', 'promotional', 'facilities', 'campus'];
+                        
+                        // First try with current folder
+                        if (pathParts.length > 2) {
+                            const currentFolder = pathParts[pathParts.length - 2];
+                            this.src = `${origin}/${projectFolder}${assetPath}${currentFolder}/${filename}`;
+                            this.setAttribute('data-tried-fallback', 'current-folder');
+                            return;
+                        }
+                        
+                        // Mark this as tried to prevent infinite recursion
+                        this.setAttribute('data-tried-fallback', 'true');
+                        
+                        // If no project folder specified, try with default branding folder
+                        if (this.alt && this.alt.toLowerCase().includes('logo')) {
+                            this.src = `${origin}/${projectFolder}/assets/images/branding/logo-primary.png`;
+                        } else {
+                            this.src = `${origin}/${projectFolder}/assets/images/placeholder.jpg`;
+                        }
+                    }
+                });
+            });
+        });
+    }
+    
+    // Set up the error handling
+    setupImageErrorHandling();
+    
+    // Expose public API
+    window.ImagePathFixer = {
+        fixImagePaths: setupImageErrorHandling
+    };
+})();

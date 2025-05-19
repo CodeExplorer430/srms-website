@@ -26,7 +26,13 @@ $school_goals = $db->fetch_all("SELECT * FROM school_goals ORDER BY display_orde
 
 <main>
     <div class="about-container">
-        <img src="<?php echo get_image_path($school_info['logo'] ?? '', 'general'); ?>" alt="<?php echo htmlspecialchars($school_info['name'] ?? 'St. Raphaela Mary School'); ?> Logo">
+        <?php 
+        // Enhanced logo handling with better error reporting and fallback
+        $logo_path = !empty($school_info['logo']) ? $school_info['logo'] : '/assets/images/branding/logo-primary.png';
+        $logo_url = get_correct_image_url($logo_path);
+        ?>
+        <img src="<?php echo $logo_url; ?>" alt="<?php echo htmlspecialchars($school_info['name'] ?? 'St. Raphaela Mary School'); ?> Logo" 
+             onerror="this.onerror=null; this.src='<?php echo SITE_URL; ?>/assets/images/branding/logo-primary.png'; console.log('Logo fallback used');">
 
         <div class="about-header">
             <h2><?php echo isset($page_content['title']) ? htmlspecialchars($page_content['title']) : 'About SRMS'; ?></h2>
@@ -67,46 +73,24 @@ $school_goals = $db->fetch_all("SELECT * FROM school_goals ORDER BY display_orde
         </div>
 
         <div class="abouttxt-area">
-            <p class="text-header">SCHOOL GOALS</p>
-            <p>St. Raphaela Mary School aims to nurture well-rounded individuals through a holistic approach to education.</p>
-
-            <ol>
-                <?php if (!empty($school_goals)): ?>
-                    <?php foreach ($school_goals as $goal): ?>
-                        <li><b><?php echo htmlspecialchars($goal['title']); ?>: </b><?php echo htmlspecialchars($goal['description']); ?></li>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <!-- Fallback content -->
-                    <li><b>Faith Formation: </b>To foster a deep and abiding faith in God, rooted in the teachings of the Christian Church, and to encourage students to live out their faith in their daily lives.</li>
-                    <li><b>Academic Excellence: </b>To provide a challenging and stimulating academic environment that enables students to reach their full intellectual potential and develop a lifelong love of learning.</li>
-                    <li><b>Stakeholder Involvement: </b>To actively involve parents, teachers, and the wider community in the educational process, creating a collaborative partnership that supports student success.</li>
-                    <li><b>Training Place of Competence: </b>To equip students with the knowledge, skills, and values necessary to succeed in their chosen fields and to become responsible and contributing members of society.</li>
-                    <li><b>Holistic Development: </b>To promote the intellectual, emotional, social, and spiritual development of each student, fostering their growth into well-rounded, compassionate, and responsible individuals.</li>
-                <?php endif; ?>
-            </ol>
-
-            <hr class="hr1">
-
-            <div class="abouttxt-area">
-                <p class="text-header">MISSION</p>
-                <?php if (isset($page_content) && isset($page_content['sections_by_key']['mission'])): ?>
-                    <?php display_page_section($page_content, 'mission', false); ?>
-                <?php else: ?>
-                    <p><?php echo nl2br(htmlspecialchars($school_info['mission'] ?? 'Mission information not available.')); ?></p>
-                <?php endif; ?>
-            </div>
-
-            <div class="abouttxt-area">
-                <p class="text-header">VISION</p>
-                <?php if (isset($page_content) && isset($page_content['sections_by_key']['vision'])): ?>
-                    <?php display_page_section($page_content, 'vision', false); ?>
-                <?php else: ?>
-                    <p><?php echo nl2br(htmlspecialchars($school_info['vision'] ?? 'Vision information not available.')); ?></p>
-                <?php endif; ?>
-            </div>
-
-            <hr class="hr2">
+            <p class="text-header">MISSION</p>
+            <?php if (isset($page_content) && isset($page_content['sections_by_key']['mission'])): ?>
+                <?php display_page_section($page_content, 'mission', false); ?>
+            <?php else: ?>
+                <p><?php echo nl2br(htmlspecialchars($school_info['mission'] ?? 'Mission information not available.')); ?></p>
+            <?php endif; ?>
         </div>
+
+        <div class="abouttxt-area">
+            <p class="text-header">VISION</p>
+            <?php if (isset($page_content) && isset($page_content['sections_by_key']['vision'])): ?>
+                <?php display_page_section($page_content, 'vision', false); ?>
+            <?php else: ?>
+                <p><?php echo nl2br(htmlspecialchars($school_info['vision'] ?? 'Vision information not available.')); ?></p>
+            <?php endif; ?>
+        </div>
+
+        <hr class="hr2">
     </div>
 </main>
 

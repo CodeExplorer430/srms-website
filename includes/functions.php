@@ -157,13 +157,22 @@ function format_requirements_list($requirements) {
  */
 
 /**
- * Get a page content from the database
+ * Enhanced get_page_content function with better error handling and debugging
  * 
  * @param string $page_key - The unique key for the page
+ * @param bool $debug - Whether to log debug information
  * @return array|null - The page data or null if not found
  */
-function get_page_content($page_key) {
-    $db = db_connect();
+function get_page_content($page_key, $debug = false) {
+    global $db;
+    
+    if (!$db) {
+        $db = new Database();
+    }
+    
+    if ($debug) {
+        error_log("Loading page content for key: $page_key");
+    }
     
     $page_key = $db->escape($page_key);
     
@@ -181,6 +190,12 @@ function get_page_content($page_key) {
         foreach ($sections as $section) {
             $page['sections_by_key'][$section['section_key']] = $section;
         }
+        
+        if ($debug) {
+            error_log("Found page content record with ID: {$page['id']}");
+            error_log("Found " . count($sections) . " sections for this page");
+        }
+        
         return $page;
     }
     
@@ -205,25 +220,37 @@ function get_page_content($page_key) {
                 $legacy_page['sections_by_key']['content'] = $main_section;
             }
             
+            if ($debug) {
+                error_log("Found legacy page record with slug: {$legacy_page['slug']}");
+            }
+            
             return $legacy_page;
         }
     } catch (Exception $e) {
         // Table doesn't exist or query failed - ignore and return null
+        if ($debug) {
+            error_log("Error checking legacy pages table: " . $e->getMessage());
+        }
+    }
+    
+    if ($debug) {
+        error_log("No page content found for key: $page_key");
     }
     
     return null;
 }
 
 /**
- * Display a section of a page
+ * Enhanced display_page_section function with better HTML handling
  * 
  * @param array $page - The page data
  * @param string $section_key - The section key to display
  * @param boolean $show_title - Whether to show the section title
  * @param string $default_content - Default content if section not found
+ * @param boolean $escape_html - Whether to escape HTML content
  * @return void
  */
-function display_page_section($page, $section_key, $show_title = true, $default_content = '') {
+function display_page_section($page, $section_key, $show_title = true, $default_content = '', $escape_html = true) {
     if (!isset($page['sections_by_key'][$section_key])) {
         echo $default_content;
         return;
@@ -235,7 +262,12 @@ function display_page_section($page, $section_key, $show_title = true, $default_
         echo '<h3>' . htmlspecialchars($section['title']) . '</h3>';
     }
     
-    echo nl2br(htmlspecialchars($section['content']));
+    if ($escape_html) {
+        echo nl2br(htmlspecialchars($section['content']));
+    } else {
+        // For content with intentional HTML formatting
+        echo $section['content'];
+    }
 }
 
 /**
@@ -797,51 +829,81 @@ function file_exists_with_alternatives($image_path) {
 }
 
 /**
- * Get correct image URL with project folder considered
- * This ensures images are properly found regardless of path storage method
+ * Get correct image URL with enhanced error handling and cross-platform support
+ * This is a unified function that resolves the inconsistencies between different image path handlers
  * 
  * @param string $image_path Image path from database
- * @return string Full, correct URL
+ * @return string Full URL for the image with proper project folder inclusion
  */
 function get_correct_image_url($image_path) {
-    if (empty($image_path)) return '';
+    if (empty($image_path)) {
+        return SITE_URL . '/assets/images/branding/logo-primary.png'; // Default fallback
+    }
     
-    // Normalize path first (remove duplicate slashes, etc)
+    // Log original path for debugging
+    error_log("Original image path: " . $image_path);
+    
+    // Normalize path (handle slashes, etc.)
     $path = normalize_image_path($image_path);
+    error_log("Normalized path: " . $path);
     
-    // Get project folder name from SITE_URL
+    // Get project folder from SITE_URL
     $project_folder = '';
     if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
         $project_folder = $matches[1]; // Should be "srms-website"
     }
+    error_log("Project folder detected: " . $project_folder);
     
-    // Force use of the project folder in final URL
-    return SITE_URL . $path;
+    // Check if path is already a full URL
+    if (filter_var($path, FILTER_VALIDATE_URL)) {
+        return $path;
+    }
+    
+    // Determine if project folder is already in the path
+    $has_project_folder = !empty($project_folder) && 
+                        (strpos($path, '/' . $project_folder . '/') === 0 || 
+                         strpos($path, '/' . $project_folder . '/') !== false);
+    
+    // Build the complete URL
+    if ($has_project_folder) {
+        // Project folder already in path, don't add it again
+        $url = SITE_URL . substr($path, strlen('/' . $project_folder));
+        error_log("URL with project folder already included: " . $url);
+    } else {
+        // Add project folder
+        $url = SITE_URL . $path;
+        error_log("URL with project folder added: " . $url);
+    }
+    
+    return $url;
 }
 
 /**
- * Enhanced normalize_image_path function that works consistently across environments
- * 
- * @param string $path Path to normalize
- * @return string Normalized path
+ * Enhanced normalize_image_path function with better cross-platform compatibility
  */
 function normalize_image_path($path) {
     if (empty($path)) return '';
     
+    // Log the original path
+    error_log("Normalizing path: " . $path);
+    
     // If it's a URL, extract just the path part
     if (filter_var($path, FILTER_VALIDATE_URL)) {
         $path = parse_url($path, PHP_URL_PATH);
+        error_log("Extracted path from URL: " . $path);
     }
     
     // Get project folder from SITE_URL
     $project_folder = '';
     if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
         $project_folder = $matches[1]; // "srms-website"
+        error_log("Project folder: " . $project_folder);
     }
     
     // Remove project folder prefix if present (to prevent duplication)
     if (!empty($project_folder) && stripos($path, '/' . $project_folder . '/') === 0) {
         $path = substr($path, strlen('/' . $project_folder));
+        error_log("Removed project folder from path: " . $path);
     }
     
     // Ensure path starts with slash and uses forward slashes
@@ -850,73 +912,62 @@ function normalize_image_path($path) {
     // Clean up double slashes
     $path = preg_replace('#/+#', '/', $path);
     
+    error_log("Final normalized path: " . $path);
     return $path;
 }
 
 /**
  * Improved cross-platform image existence verification
- * Specifically designed to work with media library paths
- */
-/**
- * Improved cross-platform image existence verification that works consistently with project folder
+ * This is a unified function that works consistently with project folder paths
  */
 function verify_image_exists($image_path) {
     if (empty($image_path)) return false;
     
-    // Normalize spaces and hyphens in the path
-    $image_path = str_replace(" ", "-", $image_path);
+    // Normalize path
     $image_path = normalize_image_path($image_path);
+    error_log("Checking if image exists: " . $image_path);
     
     // Get server root and project folder information
-    $server_root = $_SERVER['DOCUMENT_ROOT'];
+    $server_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
     
-    // Always use srms-website as the project folder
-    $project_folder = 'srms-website';
-    
-    // Most important path - with project folder (primary path to check)
-    $primary_path = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
-                   str_replace('/', DIRECTORY_SEPARATOR, $image_path);
-    
-    // Log for debugging
-    error_log("Primary image path check: $primary_path");
-    
-    // Check primary path first (with project folder - most likely correct path)
-    if (file_exists($primary_path)) {
-        error_log("Image found at primary path: $primary_path");
-        return true;
+    // Get project folder from SITE_URL
+    $project_folder = '';
+    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // "srms-website"
     }
     
-    // Additional paths to try if primary fails
-    $alt_paths = [
-        // Path without project folder (less likely)
-        $server_root . str_replace('/', DIRECTORY_SEPARATOR, $image_path),
-        
-        // Other variations including handling spaces vs hyphens
-        str_replace(['-'], [' '], $primary_path),
-        str_replace('-', ' ', $server_root . str_replace('/', DIRECTORY_SEPARATOR, $image_path))
-    ];
+    // Build possible paths to check
+    $possible_paths = [];
     
-    // Try all alternative paths
-    foreach ($alt_paths as $index => $path) {
-        error_log("Trying alternative path $index: $path");
+    // Path with project folder
+    if (!empty($project_folder)) {
+        $possible_paths[] = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
+                           str_replace('/', DIRECTORY_SEPARATOR, $image_path);
+    }
+    
+    // Path without project folder
+    $possible_paths[] = $server_root . str_replace('/', DIRECTORY_SEPARATOR, $image_path);
+    
+    // Special path for images in assets directory
+    if (strpos($image_path, '/assets/') !== false) {
+        $asset_path = substr($image_path, strpos($image_path, '/assets/'));
+        if (!empty($project_folder)) {
+            $possible_paths[] = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
+                               str_replace('/', DIRECTORY_SEPARATOR, $asset_path);
+        }
+        $possible_paths[] = $server_root . str_replace('/', DIRECTORY_SEPARATOR, $asset_path);
+    }
+    
+    // Try all possible paths
+    foreach ($possible_paths as $path) {
+        error_log("Checking path: " . $path);
         if (file_exists($path)) {
-            error_log("Image found at alternative path: $path");
+            error_log("Image found at: " . $path);
             return true;
         }
     }
     
-    // Special handling for Windows paths with either slashes
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        // Try with backslashes
-        $win_path = str_replace('/', '\\', $primary_path);
-        error_log("Trying Windows path: $win_path");
-        if (file_exists($win_path)) {
-            error_log("Image found at Windows path: $win_path");
-            return true;
-        }
-    }
-    
-    error_log("Image not found in any location: $image_path");
+    error_log("Image not found in any location: " . $image_path);
     return false;
 }
 
