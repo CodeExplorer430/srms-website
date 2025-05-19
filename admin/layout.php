@@ -3,7 +3,6 @@
  * Admin Base Layout
  * 
  * This file serves as the base template for all admin pages.
- * It includes the necessary components and structure for consistency.
  */
 
 // Start session if not already started
@@ -17,14 +16,34 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
-// Include database connection if needed
-require_once '../includes/config.php';
+// FINAL SOLUTION: Dead-simple, bulletproof approach
+// Get the site root directory (works anywhere in the site)
+$site_root = $_SERVER['DOCUMENT_ROOT'] . '/srms-website';
+
+// Is this script in the tools directory?
+$is_in_tools = strpos($_SERVER['PHP_SELF'], '/admin/tools/') !== false; 
+
+// Include config using absolute path
+require_once $site_root . '/includes/config.php';
 
 // Get additional parameters
 $page_specific_css = isset($page_specific_css) ? $page_specific_css : [];
 $page_specific_js = isset($page_specific_js) ? $page_specific_js : [];
 $body_class = isset($body_class) ? $body_class : '';
 
+// Count directory depth for tools
+if ($is_in_tools) {
+    $current_path = $_SERVER['PHP_SELF'];
+    $tools_pos = strpos($current_path, '/admin/tools/');
+    $subpath = substr($current_path, $tools_pos + strlen('/admin/tools/'));
+    $slash_count = substr_count($subpath, '/');
+    
+    // For main tools directory: ../../assets
+    // For subdirectories (content/, media/, etc): ../../../assets
+    $assets_url = str_repeat('../', 2 + $slash_count) . 'assets';
+} else {
+    $assets_url = '../assets';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -33,9 +52,9 @@ $body_class = isset($body_class) ? $body_class : '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo isset($page_title) ? $page_title . ' | ' : ''; ?>SRMS Admin</title>
     
-    <!-- Common CSS -->
-    <link rel="stylesheet" href="../assets/css/styles.css">
-    <link rel="stylesheet" href="../assets/css/admin-dashboard.css">
+    <!-- Common CSS with explicit paths -->
+    <link rel="stylesheet" href="<?php echo $assets_url; ?>/css/styles.css">
+    <link rel="stylesheet" href="<?php echo $assets_url; ?>/css/admin-dashboard.css">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     
     <!-- Page-specific CSS -->
@@ -46,7 +65,7 @@ $body_class = isset($body_class) ? $body_class : '';
     <?php endif; ?>
     
     <!-- Favicon -->
-    <link rel="shortcut icon" href="../assets/images/branding/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="<?php echo $assets_url; ?>/images/branding/favicon.ico" type="image/x-icon">
 </head>
 <body class="<?php echo $body_class; ?>">
     <!-- Preloader -->
@@ -55,12 +74,12 @@ $body_class = isset($body_class) ? $body_class : '';
     </div>
 
     <div class="admin-container">
-        <!-- Include Sidebar -->
-        <?php include_once 'includes/admin-sidebar.php'; ?>
+        <!-- Include Sidebar with absolute path -->
+        <?php include_once $site_root . '/admin/includes/admin-sidebar.php'; ?>
         
         <div class="main-content">
-            <!-- Include Header -->
-            <?php include_once 'includes/admin-header.php'; ?>
+            <!-- Include Header with absolute path -->
+            <?php include_once $site_root . '/admin/includes/admin-header.php'; ?>
             
             <!-- Page content will be injected here -->
             <div class="page-content">

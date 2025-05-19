@@ -1200,6 +1200,126 @@ function get_directory_separator() {
 }
 
 /**
+ * Cross-Platform Path Management
+ * These functions ensure consistent path handling across operating systems
+ */
+
+/**
+ * Normalize a path to be platform-compatible
+ * 
+ * @param string $path Path to normalize
+ * @return string Normalized path
+ */
+function normalize_path($path) {
+    // Convert all slashes to the platform's directory separator
+    $path = str_replace(['/', '\\'], DS, $path);
+    
+    // Remove double separators
+    while (strpos($path, DS . DS) !== false) {
+        $path = str_replace(DS . DS, DS, $path);
+    }
+    
+    return $path;
+}
+
+/**
+ * Find an executable in typical locations based on OS
+ * 
+ * @param string $executable Executable file name
+ * @param array $additional_paths Additional paths to check
+ * @return string|bool Path if found, false otherwise
+ */
+function find_executable($executable, $additional_paths = []) {
+    $possible_paths = $additional_paths;
+    
+    if (IS_WINDOWS) {
+        // Windows typical paths
+        $possible_paths = array_merge($possible_paths, [
+            'C:' . DS . 'xampp' . DS . 'mysql' . DS . 'bin' . DS . $executable,
+            'C:' . DS . 'wamp' . DS . 'bin' . DS . 'mysql' . DS . 'mysql5.7.26' . DS . 'bin' . DS . $executable,
+            'C:' . DS . 'wamp64' . DS . 'bin' . DS . 'mysql' . DS . 'mysql5.7.26' . DS . 'bin' . DS . $executable,
+            'C:' . DS . 'Program Files' . DS . 'MySQL' . DS . 'MySQL Server 5.7' . DS . 'bin' . DS . $executable,
+            'C:' . DS . 'Program Files' . DS . 'MySQL' . DS . 'MySQL Server 8.0' . DS . 'bin' . DS . $executable,
+        ]);
+        
+        // Check each path
+        foreach ($possible_paths as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+        
+        // If not found, try 'where' command
+        $output = [];
+        $return_var = 0;
+        exec('where ' . $executable, $output, $return_var);
+        
+        if ($return_var === 0 && !empty($output)) {
+            return trim($output[0]);
+        }
+    } else {
+        // Linux typical paths
+        $possible_paths = array_merge($possible_paths, [
+            '/usr/bin/' . $executable,
+            '/usr/local/bin/' . $executable,
+            '/usr/local/mysql/bin/' . $executable,
+            '/opt/lampp/bin/' . $executable,
+        ]);
+        
+        // Check each path
+        foreach ($possible_paths as $path) {
+            if (file_exists($path) && is_executable($path)) {
+                return $path;
+            }
+        }
+        
+        // If not found, try 'which' command
+        $output = [];
+        $return_var = 0;
+        exec('which ' . $executable, $output, $return_var);
+        
+        if ($return_var === 0 && !empty($output)) {
+            return trim($output[0]);
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Create a directory with proper permissions based on platform
+ * 
+ * @param string $path Directory path to create
+ * @param int $windows_perms Windows permissions (default: 0777)
+ * @param int $linux_perms Linux permissions (default: 0755)
+ * @return bool Whether directory creation was successful
+ */
+function create_platform_directory($path, $windows_perms = 0777, $linux_perms = 0755) {
+    // Normalize path
+    $path = normalize_path($path);
+    
+    // Check if directory already exists
+    if (is_dir($path)) {
+        return true;
+    }
+    
+    // Set permissions based on platform
+    $perms = IS_WINDOWS ? $windows_perms : $linux_perms;
+    
+    // Create directory recursively
+    if (!mkdir($path, $perms, true)) {
+        return false;
+    }
+    
+    // Extra permission setting for Linux
+    if (!IS_WINDOWS && $path !== '' && is_dir($path)) {
+        chmod($path, $linux_perms);
+    }
+    
+    return true;
+}
+
+/**
  * FILE PATH UTILITIES
  */
 
