@@ -35,6 +35,22 @@ function getPageTitle($current_page) {
 // Get current page
 $current_page = basename($_SERVER['PHP_SELF']);
 $page_title = getPageTitle($current_page);
+
+// Calculate the correct logout URL based on current path
+$is_in_tools = strpos($_SERVER['PHP_SELF'], '/admin/tools/') !== false;
+
+if ($is_in_tools) {
+    $current_path = $_SERVER['PHP_SELF'];
+    $tools_pos = strpos($current_path, '/admin/tools/');
+    $subpath = substr($current_path, $tools_pos + strlen('/admin/tools/'));
+    $slash_count = substr_count($subpath, '/');
+    
+    // For main tools directory: ../logout.php
+    // For subdirectories (system/, media/, etc): ../../logout.php
+    $logout_url = str_repeat('../', 1 + $slash_count) . 'logout.php';
+} else {
+    $logout_url = 'logout.php';
+}
 ?>
 
 <div class="top-bar">
@@ -55,7 +71,7 @@ $page_title = getPageTitle($current_page);
         
         <div class="name">Welcome, <?php echo $_SESSION['admin_username']; ?></div>
         
-        <a href="logout.php" class="logout-btn">
+        <a href="<?php echo $logout_url; ?>" class="logout-btn">
             <i class='bx bx-log-out'></i> Logout
         </a>
     </div>
