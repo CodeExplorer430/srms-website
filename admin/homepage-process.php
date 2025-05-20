@@ -244,6 +244,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         header('Location: homepage-manage.php?msg=saved');
         exit;
     }
+
+    // Save hero image
+    if ($_POST['action'] === 'save_hero_image') {
+        $hero_image = isset($_POST['hero_image']) ? trim($_POST['hero_image']) : '';
+        
+        // Process image upload if provided
+        if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] != UPLOAD_ERR_NO_FILE) {
+            $upload_result = upload_image($_FILES['image_upload'], 'campus');
+            if ($upload_result) {
+                $hero_image = $upload_result;
+            } else {
+                header('Location: homepage-manage.php?error=upload_failed');
+                exit;
+            }
+        }
+        
+        // Process image path consistently before storage
+        if (!empty($hero_image)) {
+            $hero_image = process_image_path_for_storage($hero_image);
+        }
+        
+        // Prepare data for database
+        $hero_image = $db->escape($hero_image);
+        
+        // Check if setting already exists
+        $existing = $db->fetch_row("SELECT * FROM site_settings WHERE setting_key = 'hero_image'");
+        
+        if ($existing) {
+            // Update existing setting
+            $db->query("UPDATE site_settings SET setting_value = '$hero_image' WHERE setting_key = 'hero_image'");
+        } else {
+            // Insert new setting
+            $db->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('hero_image', '$hero_image')");
+        }
+        
+        header('Location: homepage-manage.php?msg=saved');
+        exit;
+    }
 }
 
 // Default redirect

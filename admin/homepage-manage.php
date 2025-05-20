@@ -75,6 +75,7 @@ ob_start();
                 <div class="tab active" data-tab="slideshow">Slideshow</div>
                 <div class="tab" data-tab="facilities">Facilities</div>
                 <div class="tab" data-tab="offer-box">Offer Box</div>
+                <div class="tab" data-tab="hero-image">Hero Image</div>
             </div>
             
             <div class="tab-content">
@@ -191,6 +192,74 @@ ob_start();
                             </div>
                             
                             <button type="submit" class="btn btn-primary">Save Offer Box</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Hero Image Tab -->
+                <div class="tab-pane" id="hero-image">
+                    <div class="hero-image-management">
+                        <form action="homepage-process.php" method="post" enctype="multipart/form-data">
+                            <input type="hidden" name="action" value="save_hero_image">
+                            
+                            <?php
+                            // Get current hero image setting
+                            $hero_image = '';
+                            $hero_image_setting = $db->fetch_row("SELECT * FROM site_settings WHERE setting_key = 'hero_image'");
+                            if ($hero_image_setting) {
+                                $hero_image = $hero_image_setting['setting_value'];
+                            }
+                            ?>
+                            
+                            <div class="form-group">
+                                <label for="heroImage">Hero Background Image</label>
+                                <div class="image-input-group">
+                                    <input type="text" id="heroImage" name="hero_image" class="form-control" value="<?php echo htmlspecialchars($hero_image); ?>">
+                                    <button type="button" class="btn btn-primary open-media-library" data-target="heroImage">
+                                        <i class='bx bx-images'></i> Browse Media Library
+                                    </button>
+                                </div>
+                                <small class="form-text">Enter image path or use the media library to select an image</small>
+                                
+                                <div id="hero-image-preview" class="image-preview-container">
+                                    <div class="image-preview">
+                                        <div id="hero-preview-placeholder" class="preview-placeholder" style="<?php echo !empty($hero_image) ? 'display: none;' : ''; ?>">
+                                            <i class='bx bx-image'></i>
+                                            <span>No hero image selected</span>
+                                            <small>Select from media library or upload a new image</small>
+                                        </div>
+                                        <?php if (!empty($hero_image)): ?>
+                                        <img src="<?php echo get_admin_image_url($hero_image); ?>" 
+                                            alt="Hero Image Preview" 
+                                            id="hero-preview-image">
+                                        <?php else: ?>
+                                        <img src="" alt="Hero Image Preview" id="hero-preview-image" style="display: none;">
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="heroImageUpload">Or Upload New Hero Image</label>
+                                    <input type="file" id="heroImageUpload" name="image_upload" accept="image/jpeg, image/png, image/gif">
+                                    <small class="form-text">Max file size: 2MB. Recommended dimensions: 1920x1080px or similar wide format.</small>
+                                </div>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class='bx bx-save'></i> Save Hero Image
+                                </button>
+                            </div>
+                            
+                            <div class="notes mt-4">
+                                <div class="note">
+                                    <i class='bx bx-info-circle'></i>
+                                    <div>
+                                        <p><strong>About the Hero Image</strong></p>
+                                        <p>The hero image appears at the top of the homepage with a blue overlay. Choose a high-quality, wide image that represents your school's values and aesthetics.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -767,6 +836,13 @@ ob_start();
             if (e.target === slideshowModal) closeModal(slideshowModal);
             if (e.target === facilityModal) closeModal(facilityModal);
         });
+
+        // Image preview functionality for hero image
+        if (document.getElementById('heroImage')) {
+            document.getElementById('heroImage').addEventListener('input', function() {
+                updateImagePreview(this.value, document.getElementById('hero-preview-image'), document.getElementById('hero-preview-placeholder'));
+            });
+        }
     });
 </script>
 

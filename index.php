@@ -12,7 +12,11 @@ $slideshow_images = $db->fetch_all("SELECT * FROM slideshow WHERE is_active = TR
 $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order ASC");
 
 // Define the hero background image path
-$hero_background = '/assets/images/campus/hero-background.jpg';
+$hero_background = '/assets/images/campus/hero-background.jpg'; // Default fallback
+$hero_image_setting = $db->fetch_row("SELECT setting_value FROM site_settings WHERE setting_key = 'hero_image'");
+if ($hero_image_setting && !empty($hero_image_setting['setting_value'])) {
+    $hero_background = $hero_image_setting['setting_value'];
+}
 
 // Get featured news articles
 $featured_news = $db->fetch_all("SELECT * FROM news WHERE status = 'published' AND featured = 1 ORDER BY published_date DESC LIMIT 3");
