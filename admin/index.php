@@ -67,8 +67,8 @@ foreach ($media_directories as $key => $dir) {
     }
 }
 
-// Get recent submissions
-$recent_contacts = $db->fetch_all("SELECT * FROM contact_submissions ORDER BY submission_date DESC LIMIT 5");
+// Get recent submissions (excluding archived ones)
+$recent_contacts = $db->fetch_all("SELECT * FROM contact_submissions WHERE status != 'archived' ORDER BY submission_date DESC LIMIT 5");
 
 // Get recent media uploads
 $recent_media = [];
