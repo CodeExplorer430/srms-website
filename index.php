@@ -14,6 +14,9 @@ $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order AS
 // Define the hero background image path
 $hero_background = '/assets/images/campus/hero-background.jpg';
 
+// Get featured news articles
+$featured_news = $db->fetch_all("SELECT * FROM news WHERE status = 'published' AND featured = 1 ORDER BY published_date DESC LIMIT 3");
+
 /**
  * UPDATED: Get image URL function that leverages the existing robust functions.php methods
  * This is aligned with how the admin dashboard handles images
@@ -92,6 +95,167 @@ function debug_homepage_image_paths() {
 // Uncomment to debug - comment back when not needed
 // debug_homepage_image_paths();
 ?>
+
+<!-- Custom inline style for featured news section -->
+<style>
+/* Featured News Section */
+.featured-news {
+    padding: 60px 0;
+    background-color: #f5f7fa;
+}
+
+.title-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.title-section h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 10px;
+}
+
+.featured-news-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 30px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 15px;
+}
+
+.featured-card {
+    flex: 1;
+    min-width: 300px;
+    background-color: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.featured-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.featured-image {
+    position: relative;
+    height: 200px;
+    overflow: hidden;
+}
+
+.featured-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s ease;
+}
+
+.featured-card:hover .featured-image img {
+    transform: scale(1.05);
+}
+
+.featured-badge {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background-color: var(--primary);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+}
+
+.featured-badge i {
+    margin-right: 5px;
+}
+
+.featured-content {
+    padding: 20px;
+}
+
+.featured-date {
+    color: #6c757d;
+    font-size: 14px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.featured-date i {
+    margin-right: 5px;
+}
+
+.featured-content h3 {
+    margin-bottom: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--primary);
+}
+
+.featured-content p {
+    color: #6c757d;
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.read-more {
+    display: inline-flex;
+    align-items: center;
+    color: var(--blue);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.read-more:hover {
+    color: var(--primary);
+}
+
+.read-more i {
+    margin-left: 5px;
+    transition: transform 0.3s;
+}
+
+.read-more:hover i {
+    transform: translateX(3px);
+}
+
+.view-all {
+    text-align: center;
+    margin-top: 40px;
+}
+
+.btn-view-all {
+    display: inline-block;
+    background-color: var(--primary);
+    color: white;
+    padding: 10px 25px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: background-color 0.3s;
+}
+
+.btn-view-all:hover {
+    background-color: var(--dark-blue);
+}
+
+@media (max-width: 768px) {
+    .featured-news-container {
+        flex-direction: column;
+    }
+    
+    .featured-card {
+        width: 100%;
+    }
+}
+</style>
 
 <!-- Custom inline style for the hero section background -->
 <style>
@@ -185,6 +349,52 @@ function debug_homepage_image_paths() {
         <?php endif; ?>
     </ul>
 </section>
+
+<?php if (!empty($featured_news)): ?>
+<section class="featured-news">
+    <div class="title-section">
+        <h1>FEATURED NEWS</h1>
+        <p>Stay updated with our latest announcements and events</p>
+    </div>
+
+    <div class="featured-news-container">
+        <?php foreach($featured_news as $article): ?>
+            <div class="featured-card">
+                <?php 
+                // Use the improved image URL function
+                $image_url = get_homepage_image_url($article['image']);
+                ?>
+                <div class="featured-image">
+                    <img src="<?php echo $image_url; ?>" alt="<?php echo htmlspecialchars($article['title']); ?>">
+                    <div class="featured-badge">
+                        <i class='bx bx-star'></i> Featured
+                    </div>
+                </div>
+                <div class="featured-content">
+                    <div class="featured-date">
+                        <i class='bx bx-calendar'></i> <?php echo date('F j, Y', strtotime($article['published_date'])); ?>
+                    </div>
+                    <h3><?php echo htmlspecialchars($article['title']); ?></h3>
+                    <p>
+                        <?php 
+                        if (!empty($article['summary'])) {
+                            echo htmlspecialchars(substr($article['summary'], 0, 120)) . (strlen($article['summary']) > 120 ? '...' : '');
+                        } else {
+                            echo htmlspecialchars(substr(strip_tags($article['content']), 0, 120)) . '...';
+                        }
+                        ?>
+                    </p>
+                    <a href="news-detail.php?id=<?php echo $article['id']; ?>" class="read-more">Read More <i class='bx bx-right-arrow-alt'></i></a>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    
+    <div class="view-all">
+        <a href="news.php" class="btn-view-all">View All News</a>
+    </div>
+</section>
+<?php endif; ?>
 
 <section class="miss-vis">
     <div class="msvs-container">

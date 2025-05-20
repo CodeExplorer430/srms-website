@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $published_date = isset($_POST['published_date']) ? trim($_POST['published_date']) : date('Y-m-d H:i:s');
     $status = isset($_POST['status']) ? trim($_POST['status']) : 'draft';
     $featured = isset($_POST['featured']) ? 1 : 0;
-    $category = isset($_POST['category']) ? trim($_POST['category']) : ''; // Get category from form
+    $category = isset($_POST['category']) ? trim($_POST['category']) : '';
     
     // Validate inputs
     if (empty($title)) {
