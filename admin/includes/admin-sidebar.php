@@ -47,10 +47,42 @@ if (false) { // Disabled in favor of absolute paths
     }
 }
 ?>
+<?php
+// Get school logo from database at the top of the file after path calculations
+
+// First make sure we have the DB connection (include if needed)
+if (!class_exists('Database')) {
+    if (file_exists($_SERVER['DOCUMENT_ROOT'] . '/srms-website/includes/db.php')) {
+        require_once $_SERVER['DOCUMENT_ROOT'] . '/srms-website/includes/db.php';
+    }
+}
+
+// Get logo path with fallback
+$school_logo = '/assets/images/branding/logo-primary.png'; // Default fallback
+
+// Try to get from database if Database class is available
+if (class_exists('Database')) {
+    try {
+        $db = new Database();
+        $school_info = $db->fetch_row("SELECT logo FROM school_information LIMIT 1");
+        if ($school_info && !empty($school_info['logo'])) {
+            $school_logo = $school_info['logo'];
+        }
+    } catch (Exception $e) {
+        // Silently fall back to default if error occurs
+        error_log("Error fetching logo from database: " . $e->getMessage());
+    }
+}
+
+// Make sure logo path starts with a slash
+if (substr($school_logo, 0, 1) !== '/') {
+    $school_logo = '/' . $school_logo;
+}
+?>
 <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <!-- FIXED LOGO PATH: Uses absolute path -->
-        <img src="<?php echo $assets_path; ?>/images/branding/logo-primary.png" alt="St. Raphaela Mary School Logo" class="logo-img">
+       <img src="<?php echo $assets_path . $school_logo; ?>" alt="St. Raphaela Mary School Logo" class="logo-img" onerror="this.src='<?php echo $assets_path; ?>/images/branding/logo-primary.png';">
         <h3 class="logo-text">SRMS Admin</h3>
         <button id="sidebar-toggle" class="sidebar-toggle">
             <i class='bx bx-chevron-left'></i>
