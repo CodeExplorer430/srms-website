@@ -27,6 +27,13 @@ $facilities = $db->fetch_all("SELECT * FROM facilities ORDER BY display_order AS
 // Get offer box content
 $offer_box = $db->fetch_all("SELECT * FROM offer_box ORDER BY display_order ASC");
 
+// Get hero image setting
+$hero_image = '';
+$hero_image_setting = $db->fetch_row("SELECT * FROM site_settings WHERE setting_key = 'hero_image'");
+if ($hero_image_setting) {
+    $hero_image = $hero_image_setting['setting_value'];
+}
+
 /**
  * Helper function for displaying images in admin panel
  * Uses the robust image path functions from functions.php
@@ -37,13 +44,20 @@ function get_admin_image_url($image_path) {
     // Use the normalize_image_path function from functions.php
     $normalized_path = normalize_image_path($image_path);
     
+    // Log the normalized path for debugging
+    error_log("Normalized image path: " . $normalized_path);
+    
     // Try to get the correct URL using our helper functions
     if (function_exists('get_correct_image_url')) {
-        return get_correct_image_url($normalized_path);
+        $url = get_correct_image_url($normalized_path);
+        error_log("Image URL from get_correct_image_url: " . $url);
+        return $url;
     }
     
     // Build a URL with SITE_URL as fallback
-    return SITE_URL . $normalized_path;
+    $url = SITE_URL . $normalized_path;
+    error_log("Fallback image URL: " . $url);
+    return $url;
 }
 
 // Start output buffer for main content
@@ -57,6 +71,22 @@ ob_start();
             <span>Homepage content has been saved successfully.</span>
         </div>
     <?php endif; ?>
+<?php endif; ?>
+
+<?php if(isset($_SESSION['admin_warning'])): ?>
+    <div class="message message-warning">
+        <i class='bx bx-info-circle'></i>
+        <span><?php echo $_SESSION['admin_warning']; ?></span>
+    </div>
+    <?php unset($_SESSION['admin_warning']); ?>
+<?php endif; ?>
+
+<?php if(isset($_SESSION['admin_message'])): ?>
+    <div class="message message-success">
+        <i class='bx bx-check-circle'></i>
+        <span><?php echo $_SESSION['admin_message']; ?></span>
+    </div>
+    <?php unset($_SESSION['admin_message']); ?>
 <?php endif; ?>
 
 <div class="panel mb-4">
@@ -195,21 +225,12 @@ ob_start();
                         </form>
                     </div>
                 </div>
-
+                
                 <!-- Hero Image Tab -->
                 <div class="tab-pane" id="hero-image">
                     <div class="hero-image-management">
                         <form action="homepage-process.php" method="post" enctype="multipart/form-data">
                             <input type="hidden" name="action" value="save_hero_image">
-                            
-                            <?php
-                            // Get current hero image setting
-                            $hero_image = '';
-                            $hero_image_setting = $db->fetch_row("SELECT * FROM site_settings WHERE setting_key = 'hero_image'");
-                            if ($hero_image_setting) {
-                                $hero_image = $hero_image_setting['setting_value'];
-                            }
-                            ?>
                             
                             <div class="form-group">
                                 <label for="heroImage">Hero Background Image</label>
@@ -221,7 +242,7 @@ ob_start();
                                 </div>
                                 <small class="form-text">Enter image path or use the media library to select an image</small>
                                 
-                                <div id="hero-image-preview" class="image-preview-container">
+                                <div id="unified-image-preview" class="image-preview-container">
                                     <div class="image-preview">
                                         <div id="hero-preview-placeholder" class="preview-placeholder" style="<?php echo !empty($hero_image) ? 'display: none;' : ''; ?>">
                                             <i class='bx bx-image'></i>
@@ -236,6 +257,7 @@ ob_start();
                                         <img src="" alt="Hero Image Preview" id="hero-preview-image" style="display: none;">
                                         <?php endif; ?>
                                     </div>
+                                    <div id="source-indicator" class="image-source-indicator"></div>
                                 </div>
 
                                 <div class="form-group">
@@ -406,6 +428,48 @@ ob_start();
 </div>
 
 <style>
+    /* Enhanced Image Preview Styles */
+    .image-source-indicator {
+        text-align: right;
+        font-size: 13px;
+        margin-top: 8px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background-color: #f8f9fa;
+        display: inline-block;
+        float: right;
+    }
+    
+    .image-preview-container.library-mode .image-preview {
+        border-color: #28a745;
+        border-style: solid;
+        background-color: rgba(40, 167, 69, 0.05);
+    }
+    
+    .image-preview-container.library-mode .image-source-indicator span {
+        color: #28a745;
+    }
+    
+    .image-preview-container.upload-mode .image-preview {
+        border-color: #007bff;
+        border-style: solid;
+        background-color: rgba(0, 123, 255, 0.05);
+    }
+    
+    .image-preview-container.upload-mode .image-source-indicator span {
+        color: #007bff;
+    }
+    
+    .image-preview-container.error-mode .image-preview {
+        border-color: #dc3545;
+        border-style: solid;
+        background-color: rgba(220, 53, 69, 0.05);
+    }
+    
+    .image-preview-container.error-mode .image-source-indicator span {
+        color: #dc3545;
+    }
+
     /* Tab Styles - Same as in admissions-manage.php */
     .tabs {
         margin-top: 20px;
@@ -534,6 +598,41 @@ ob_start();
         gap: 10px;
     }
     
+    /* Hero Image styles */
+    .hero-image-management .form-actions {
+        margin-top: 20px;
+    }
+    
+    .notes {
+        margin-top: 30px;
+    }
+    
+    .note {
+        background-color: #f8f9fa;
+        border-left: 4px solid var(--primary-color);
+        padding: 15px;
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .note i {
+        font-size: 24px;
+        color: var(--primary-color);
+    }
+    
+    .note p {
+        margin: 0 0 10px 0;
+    }
+    
+    .note p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .mt-4 {
+        margin-top: 1.5rem;
+    }
+    
     /* Responsive adjustments */
     @media (max-width: 768px) {
         .slides-grid, .facilities-grid {
@@ -590,6 +689,14 @@ ob_start();
         const facilityPreviewPlaceholder = document.getElementById('facility-preview-placeholder');
         const closeFacilityModal = document.getElementById('closeFacilityModal');
         const cancelFacilityBtn = document.getElementById('cancelFacilityBtn');
+        
+        // Hero image elements
+        const heroImage = document.getElementById('heroImage');
+        const heroPreviewImage = document.getElementById('hero-preview-image');
+        const heroPreviewPlaceholder = document.getElementById('hero-preview-placeholder');
+        const sourceIndicator = document.getElementById('source-indicator');
+        const heroImageUpload = document.getElementById('heroImageUpload');
+        const unifiedPreview = document.getElementById('unified-image-preview');
         
         // Add Slide Button
         const addSlideBtn = document.getElementById('add-slide-btn');
@@ -756,11 +863,15 @@ ob_start();
             }
         });
         
-        // Improved image preview function for handling paths
+        // Enhanced updateImagePreview function with better path handling
         function updateImagePreview(path, previewImage, previewPlaceholder) {
             if (path && path.trim()) {
-                // Use the same logic as server-side get_admin_image_url
-                const siteUrl = window.location.origin + '/srms-website';
+                console.log('Updating preview with path:', path);
+                
+                // Reset preview container classes
+                if (unifiedPreview) {
+                    unifiedPreview.className = 'image-preview-container library-mode';
+                }
                 
                 // Normalize path
                 let normalizedPath = path;
@@ -768,6 +879,9 @@ ob_start();
                 if (!normalizedPath.startsWith('/')) {
                     normalizedPath = '/' + normalizedPath;
                 }
+                
+                // Get site URL with project folder
+                const siteUrl = window.location.origin + '/srms-website';
                 
                 // Check if the path already contains the full URL
                 if (!path.includes('http')) {
@@ -777,12 +891,66 @@ ob_start();
                     previewImage.src = path;
                 }
                 
+                // Update source indicator
+                if (sourceIndicator) {
+                    sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+                }
+                
                 previewImage.style.display = 'block';
                 previewPlaceholder.style.display = 'none';
+                
+                // Handle image loading errors
+                previewImage.onerror = function() {
+                    console.log('Image failed to load, trying alternative paths');
+                    
+                    // Try alternative paths
+                    const pathWithoutProject = normalizedPath.replace(/^\/srms-website\//, '/');
+                    const filename = normalizedPath.split('/').pop();
+                    const pathVariations = [
+                        siteUrl + pathWithoutProject,
+                        siteUrl + '/assets/images/campus/' + filename,
+                        siteUrl + '/assets/images/promotional/' + filename
+                    ];
+                    
+                    // Try each variation
+                    tryNextPath(pathVariations, 0, previewImage);
+                };
             } else {
                 previewImage.style.display = 'none';
                 previewPlaceholder.style.display = 'flex';
+                
+                // Reset source indicator
+                if (sourceIndicator) {
+                    sourceIndicator.innerHTML = '';
+                }
+                
+                // Reset preview container classes
+                if (unifiedPreview) {
+                    unifiedPreview.className = 'image-preview-container';
+                }
             }
+        }
+
+        // Helper function to try alternative paths
+        function tryNextPath(paths, index, imgElement) {
+            if (index >= paths.length) {
+                console.log('All alternative paths failed');
+                if (unifiedPreview) {
+                    unifiedPreview.className = 'image-preview-container error-mode';
+                }
+                if (sourceIndicator) {
+                    sourceIndicator.innerHTML = '<span><i class="bx bx-error-circle"></i> Image not found</span>';
+                }
+                return;
+            }
+            
+            console.log('Trying path:', paths[index]);
+            imgElement.src = paths[index];
+            
+            imgElement.onerror = function() {
+                // Try next path
+                tryNextPath(paths, index + 1, imgElement);
+            };
         }
         
         // Image preview functionality for slideshow
@@ -798,6 +966,105 @@ ob_start();
                 updateImagePreview(this.value, facilityPreviewImage, facilityPreviewPlaceholder);
             });
         }
+        
+        // Image preview functionality for hero image
+        if (heroImage) {
+            heroImage.addEventListener('input', function() {
+                updateImagePreview(this.value, heroPreviewImage, heroPreviewPlaceholder);
+            });
+        }
+
+        // File upload preview
+        if (heroImageUpload) {
+            heroImageUpload.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const file = this.files[0];
+                    const reader = new FileReader();
+                    
+                    // Update UI to show we're processing
+                    if (sourceIndicator) {
+                        sourceIndicator.innerHTML = '<span><i class="bx bx-loader-alt bx-spin"></i> Processing...</span>';
+                    }
+                    
+                    reader.onload = function(e) {
+                        // Display file preview
+                        heroPreviewImage.src = e.target.result;
+                        heroPreviewImage.style.display = 'block';
+                        heroPreviewPlaceholder.style.display = 'none';
+                        
+                        // Update preview container classes
+                        if (unifiedPreview) {
+                            unifiedPreview.className = 'image-preview-container upload-mode';
+                        }
+                        
+                        // Update source indicator
+                        if (sourceIndicator) {
+                            sourceIndicator.innerHTML = `<span><i class="bx bx-upload"></i> Local upload: <strong>${file.name}</strong> (not saved until you submit)</span>`;
+                        }
+                        
+                        // Verify file size
+                        if (file.size > 2 * 1024 * 1024) { // 2MB
+                            if (sourceIndicator) {
+                                sourceIndicator.innerHTML += `<br><span style="color: #dc3545;"><i class="bx bx-error-circle"></i> Warning: File size (${(file.size/1024/1024).toFixed(2)}MB) exceeds recommended 2MB limit.</span>`;
+                            }
+                        }
+                    };
+                    
+                    reader.onerror = function() {
+                        // Show error
+                        if (unifiedPreview) {
+                            unifiedPreview.className = 'image-preview-container error-mode';
+                        }
+                        if (sourceIndicator) {
+                            sourceIndicator.innerHTML = '<span><i class="bx bx-error-circle"></i> Error reading file</span>';
+                        }
+                    };
+                    
+                    reader.readAsDataURL(this.files[0]);
+                    
+                    // Clear the text input to avoid conflicts
+                    if (heroImage) {
+                        heroImage.value = '';
+                    }
+                }
+            });
+        }
+
+        // Define global selectMediaItem function for media library integration
+        window.selectMediaItem = function(path, displayUrl) {
+            console.log('Media item selected:', path);
+            
+            // If we have a target input field
+            const targetField = document.querySelector('[data-target]') ? 
+                                document.querySelector('[data-target]').getAttribute('data-target') : 
+                                'heroImage';
+            
+            const inputField = document.getElementById(targetField);
+            if (inputField) {
+                // Normalize the path
+                let normalizedPath = path;
+                if (!normalizedPath.startsWith('/')) {
+                    normalizedPath = '/' + normalizedPath;
+                }
+                
+                // Update the input field
+                inputField.value = normalizedPath;
+                
+                // Update the preview
+                if (targetField === 'heroImage') {
+                    updateImagePreview(normalizedPath, heroPreviewImage, heroPreviewPlaceholder);
+                    
+                    // Clear any file upload
+                    if (heroImageUpload) {
+                        heroImageUpload.value = '';
+                    }
+                } else if (targetField === 'slideImage') {
+                    updateImagePreview(normalizedPath, slidePreviewImage, slidePreviewPlaceholder);
+                } else if (targetField === 'facilityImage') {
+                    updateImagePreview(normalizedPath, facilityPreviewImage, facilityPreviewPlaceholder);
+                }
+            }
+        };
         
         // Close Modal Buttons
         [closeSlideshowModal, cancelSlideshowBtn].forEach(btn => {
@@ -836,12 +1103,102 @@ ob_start();
             if (e.target === slideshowModal) closeModal(slideshowModal);
             if (e.target === facilityModal) closeModal(facilityModal);
         });
-
-        // Image preview functionality for hero image
-        if (document.getElementById('heroImage')) {
-            document.getElementById('heroImage').addEventListener('input', function() {
-                updateImagePreview(this.value, document.getElementById('hero-preview-image'), document.getElementById('hero-preview-placeholder'));
+        
+        // Function to verify image exists (more comprehensive)
+        function verifyImagePath(path) {
+            if (!path || path.trim() === '') return false;
+            
+            // Normalize path
+            path = path.startsWith('/') ? path : '/' + path;
+            
+            // Make AJAX call to verify image exists (this is async, but better than nothing)
+            fetch(getImageUrl(path), { method: 'HEAD' })
+                .then(response => {
+                    if (response.ok) {
+                        console.log('Image verified at:', path);
+                        return true;
+                    } else {
+                        console.warn('Image not found at:', path);
+                        return false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error verifying image:', error);
+                    return false;
+                });
+        }
+        
+        // Function to convert relative path to full URL
+        function getImageUrl(path) {
+            // If already a full URL, return as is
+            if (path.startsWith('http')) return path;
+            
+            // Get current URL components
+            const baseUrl = window.location.origin;
+            const projectFolder = window.location.pathname.split('/')[1];
+            
+            // Ensure path starts with a slash
+            path = path.startsWith('/') ? path : '/' + path;
+            
+            // Return full URL
+            return baseUrl + '/' + projectFolder + path;
+        }
+        
+        // Initialize the preview from existing path if any
+        if (heroImage && heroImage.value.trim()) {
+            console.log('Initializing hero image preview with:', heroImage.value);
+            // Use a slight delay to ensure DOM is fully loaded
+            setTimeout(function() {
+                updateImagePreview(heroImage.value, heroPreviewImage, heroPreviewPlaceholder);
+                
+                // Add library mode class for initial load
+                if (unifiedPreview) {
+                    unifiedPreview.className = 'image-preview-container library-mode';
+                }
+                
+                // Set source indicator for initial state
+                if (sourceIndicator) {
+                    sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+                }
+            }, 200);
+        }
+        
+        // Add image verification info if path changes
+        if (heroImage) {
+            heroImage.addEventListener('change', function() {
+                const path = this.value.trim();
+                if (path) {
+                    // Attempt to verify the image
+                    verifyImagePath(path);
+                }
             });
+        }
+    });
+
+    // Add warning for large viewports
+    window.addEventListener('resize', function() {
+        if (window.innerWidth > 1920) {
+            const noteElement = document.querySelector('.note');
+            if (noteElement) {
+                // Check if we already added the warning
+                if (!document.getElementById('responsive-warning')) {
+                    const warningDiv = document.createElement('div');
+                    warningDiv.id = 'responsive-warning';
+                    warningDiv.innerHTML = '<strong>Screen Size Note:</strong> Your screen is very wide. For best results with hero images, choose images with a 16:9 or similar widescreen aspect ratio.';
+                    warningDiv.style.marginTop = '10px';
+                    warningDiv.style.color = '#856404';
+                    warningDiv.style.backgroundColor = '#fff3cd';
+                    warningDiv.style.padding = '8px';
+                    warningDiv.style.borderRadius = '4px';
+                    
+                    noteElement.appendChild(warningDiv);
+                }
+            }
+        } else {
+            const warningDiv = document.getElementById('responsive-warning');
+            if (warningDiv) {
+                warningDiv.remove();
+            }
         }
     });
 </script>

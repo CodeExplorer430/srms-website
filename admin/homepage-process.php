@@ -251,18 +251,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         
         // Process image upload if provided
         if (isset($_FILES['image_upload']) && $_FILES['image_upload']['error'] != UPLOAD_ERR_NO_FILE) {
+            // Log the upload attempt
+            error_log('Hero Image Upload: Processing image upload for file: ' . $_FILES['image_upload']['name']);
+            
             $upload_result = upload_image($_FILES['image_upload'], 'campus');
             if ($upload_result) {
+                // Use the new image path immediately
                 $hero_image = $upload_result;
+                
+                // Normalize the path for display/storage
+                $hero_image = normalize_image_path($hero_image);
+                
+                // Add a small delay to ensure file is written to disk
+                usleep(500000); // 0.5 second delay
+                
+                // Clear file caches
+                clearstatcache();
+                
+                // Verify the uploaded file exists
+                if (verify_image_exists($hero_image)) {
+                    error_log("Hero Image: Verified uploaded image exists at path: {$hero_image}");
+                } else {
+                    error_log("Hero Image: WARNING - Uploaded image not found at path: {$hero_image}");
+                    $_SESSION['admin_warning'] = "Image was uploaded successfully but verification check failed. The image may not display correctly.";
+                }
             } else {
+                error_log("Hero Image: Upload failed");
                 header('Location: homepage-manage.php?error=upload_failed');
                 exit;
             }
         }
         
+        // Normalize the manually entered image path if no upload
+        if (empty($upload_result) && !empty($hero_image)) {
+            $original_path = $hero_image;
+            $hero_image = normalize_image_path($original_path);
+            error_log("Hero Image: Normalized image path from '{$original_path}' to '{$hero_image}'");
+        }
+        
         // Process image path consistently before storage
         if (!empty($hero_image)) {
             $hero_image = process_image_path_for_storage($hero_image);
+            error_log("Processed hero image path: " . $hero_image);
         }
         
         // Prepare data for database
@@ -274,12 +304,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($existing) {
             // Update existing setting
             $db->query("UPDATE site_settings SET setting_value = '$hero_image' WHERE setting_key = 'hero_image'");
+            error_log("Updated hero image setting to: " . $hero_image);
         } else {
             // Insert new setting
             $db->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('hero_image', '$hero_image')");
+            error_log("Inserted new hero image setting: " . $hero_image);
         }
         
-        header('Location: homepage-manage.php?msg=saved');
+        // Set success message
+        $_SESSION['admin_message'] = 'Hero image has been updated successfully.';
+        
+        header('Location: homepage-manage.php?msg=saved#hero-image');
         exit;
     }
 }
