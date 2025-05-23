@@ -156,6 +156,9 @@ function get_header_image_url($path) {
     <?php endif; ?>
     
     <script src="<?php echo SITE_URL; ?>/assets/js/main.js" defer></script>
+    
+    <!-- Favicon -->
+    <link rel="shortcut icon" href="<?php echo SITE_URL; ?>/assets/images/branding/favicon.ico" type="image/x-icon">
 </head>
 <body>
     <?php if (defined('DEBUG_MODE') && DEBUG_MODE): ?>
