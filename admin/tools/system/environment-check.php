@@ -2,17 +2,43 @@
 /**
  * Environment Check Tool
  * Comprehensive system for diagnosing server environment, configurations, and requirements
+ * Updated for Hostinger compatibility
+ * Version: 2.0
  */
 
 // Start session and check login
 session_start();
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: ../../login.php');
+    header('Location: ' . (defined('IS_PRODUCTION') && IS_PRODUCTION ? '/admin/login.php' : '../../login.php'));
     exit;
 }
 
-// Get the site root directory
-$site_root = $_SERVER['DOCUMENT_ROOT'] . '/srms-website';
+// Environment-aware path resolution
+function get_site_root() {
+    $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
+    
+    if ($is_production) {
+        // In production, site is at document root
+        return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+    } else {
+        // In development, check for project folder
+        $project_folder = '';
+        if (preg_match('#/([^/]+)$#', parse_url(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '', PHP_URL_PATH), $matches)) {
+            $project_folder = $matches[1];
+        }
+        
+        // If project folder found, use it
+        if (!empty($project_folder)) {
+            return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . '/' . $project_folder;
+        } else {
+            // Fallback to /srms-website
+            return $_SERVER['DOCUMENT_ROOT'] . '/srms-website';
+        }
+    }
+}
+
+// Get the site root directory using environment-aware method
+$site_root = get_site_root();
 
 // Include necessary files using absolute paths
 include_once $site_root . '/includes/config.php';
@@ -53,11 +79,21 @@ $system_info = [
         'value' => $_SERVER['DOCUMENT_ROOT'],
         'status' => 'info'
     ],
+    'site_root' => [
+        'name' => 'Site Root',
+        'value' => $site_root,
+        'status' => 'info'
+    ],
     'server_type' => [
         'name' => 'Server Type',
         'value' => defined('SERVER_TYPE') ? SERVER_TYPE : 'Unknown',
         'status' => defined('SERVER_TYPE') ? 'success' : 'warning',
         'message' => defined('SERVER_TYPE') ? '' : 'Server type not detected properly'
+    ],
+    'environment' => [
+        'name' => 'Environment',
+        'value' => defined('IS_PRODUCTION') && IS_PRODUCTION ? 'Production' : 'Development',
+        'status' => 'info'
     ],
     'site_url' => [
         'name' => 'Site URL',
@@ -119,10 +155,13 @@ $php_config_checks = [
     ]
 ];
 
+// Enhanced environment detection
+$is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
+
 // Determine project folder from SITE_URL
 $project_folder = '';
-if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-    $project_folder = $matches[1]; // Should be "srms-website"
+if (!$is_production && preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+    $project_folder = $matches[1]; // Should be "srms-website" in development
 }
 
 // Get document root without trailing slash
@@ -140,9 +179,9 @@ $directory_paths = [
 ];
 
 foreach ($directory_paths as $dir_path) {
-    // Check path with project folder
+    // Build the full server path based on environment
     $full_path = $doc_root;
-    if (!empty($project_folder)) {
+    if (!$is_production && !empty($project_folder)) {
         $full_path .= DIRECTORY_SEPARATOR . $project_folder;
     }
     $full_path .= str_replace('/', DIRECTORY_SEPARATOR, $dir_path);
@@ -262,24 +301,24 @@ try {
     ];
 }
 
-// Check file and directory permissions
+// Check file and directory permissions based on environment
 $permission_checks['uploads_dir'] = [
     'name' => 'Uploads Directory',
-    'path' => $doc_root . ($project_folder ? "/{$project_folder}" : '') . '/assets/uploads',
+    'path' => $doc_root . ($is_production ? '' : ($project_folder ? "/{$project_folder}" : '')) . '/assets/uploads',
     'recommendation' => IS_WINDOWS ? '0777 (Full access)' : '0755 (rwxr-xr-x)',
     'status' => 'info'
 ];
 
 $permission_checks['images_dir'] = [
     'name' => 'Images Directory',
-    'path' => $doc_root . ($project_folder ? "/{$project_folder}" : '') . '/assets/images',
+    'path' => $doc_root . ($is_production ? '' : ($project_folder ? "/{$project_folder}" : '')) . '/assets/images',
     'recommendation' => IS_WINDOWS ? '0777 (Full access)' : '0755 (rwxr-xr-x)',
     'status' => 'info'
 ];
 
 $permission_checks['includes_dir'] = [
     'name' => 'Includes Directory',
-    'path' => $doc_root . ($project_folder ? "/{$project_folder}" : '') . '/includes',
+    'path' => $doc_root . ($is_production ? '' : ($project_folder ? "/{$project_folder}" : '')) . '/includes',
     'recommendation' => IS_WINDOWS ? '0755 (Full access)' : '0755 (rwxr-xr-x)',
     'status' => 'info'
 ];
@@ -314,6 +353,28 @@ if (isset($_POST['action']) && $_POST['action'] === 'create_directories') {
                 $directory_checks[$dir_path]['message'] = $directory_checks[$dir_path]['writable'] ? 
                     'Directory created and is writable' : 'Directory created but is not writable';
             }
+        }
+    }
+}
+
+// Handle single directory creation action
+if (isset($_POST['action']) && $_POST['action'] === 'create_single_directory' && isset($_POST['directory'])) {
+    $dir_path = $_POST['directory'];
+    if (isset($directory_checks[$dir_path]) && !$directory_checks[$dir_path]['exists']) {
+        $success = @mkdir($directory_checks[$dir_path]['path'], 0755, true);
+        $action_results[$dir_path] = [
+            'path' => $directory_checks[$dir_path]['path'],
+            'success' => $success,
+            'message' => $success ? 'Directory created successfully' : 'Failed to create directory'
+        ];
+        
+        // Update directory checks
+        if ($success) {
+            $directory_checks[$dir_path]['exists'] = true;
+            $directory_checks[$dir_path]['writable'] = is_writable($directory_checks[$dir_path]['path']);
+            $directory_checks[$dir_path]['status'] = $directory_checks[$dir_path]['writable'] ? 'success' : 'warning';
+            $directory_checks[$dir_path]['message'] = $directory_checks[$dir_path]['writable'] ? 
+                'Directory created and is writable' : 'Directory created but is not writable';
         }
     }
 }
@@ -812,6 +873,24 @@ ob_start();
                             <p>File uploads are disabled in your PHP configuration. Enable them by setting file_uploads = On in your php.ini file.</p>
                         </li>
                         <?php endif; ?>
+
+                        <?php if ($is_production): ?>
+                        <li class="recommendation-item info">
+                            <div class="recommendation-header">
+                                <i class='bx bx-info-circle'></i>
+                                <h5>Production Environment Detected</h5>
+                            </div>
+                            <p>This site is running in production mode. Make sure error display is turned off and logging is enabled for security.</p>
+                        </li>
+                        <?php else: ?>
+                        <li class="recommendation-item info">
+                            <div class="recommendation-header">
+                                <i class='bx bx-info-circle'></i>
+                                <h5>Development Environment Detected</h5>
+                            </div>
+                            <p>This site is running in development mode. For production deployment, update the IS_PRODUCTION flag in environment.php.</p>
+                        </li>
+                        <?php endif; ?>
                     </ul>
                 </div>
             </div>
@@ -1293,6 +1372,11 @@ document.addEventListener('DOMContentLoaded', function() {
     border-left-color: #28a745;
 }
 
+.recommendation-item.info {
+    background-color: rgba(60, 145, 230, 0.05);
+    border-left-color: #3C91E6;
+}
+
 .recommendation-header {
     display: flex;
     align-items: center;
@@ -1314,6 +1398,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .recommendation-item.success .recommendation-header i {
     color: #28a745;
+}
+
+.recommendation-item.info .recommendation-header i {
+    color: #3C91E6;
 }
 
 .recommendation-header h5 {
@@ -1395,6 +1483,11 @@ $page_title = 'Environment Check Tool';
 $page_specific_css = [];
 $page_specific_js = [];
 
-// Include the layout - need to use a different path for the layout
-include '../../layout.php';
+// Include the layout with environment-aware path
+$layout_path = '../../layout.php';
+if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+    $layout_path = $_SERVER['DOCUMENT_ROOT'] . '/layout.php';
+}
+
+include $layout_path;
 ?>
