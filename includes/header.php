@@ -1,6 +1,6 @@
 <?php
 /**
- * Header Include File
+ * Header Include File - FIXED VERSION
  * Contains common header elements for all pages
  */
 
@@ -47,7 +47,6 @@ if (strpos($current_url, 'academics/') !== false) {
 }
 
 // DIRECT NAVIGATION QUERY
-// This ensures we get exactly the navigation items we need, in the correct order
 $navigation = [];
 
 // Get HOME
@@ -155,8 +154,6 @@ function get_header_image_url($path) {
         <?php endforeach; ?>
     <?php endif; ?>
     
-    <script src="<?php echo SITE_URL; ?>/assets/js/main.js" defer></script>
-    
     <!-- Favicon -->
     <link rel="shortcut icon" href="<?php echo SITE_URL; ?>/assets/images/branding/favicon.ico" type="image/x-icon">
 </head>
@@ -242,23 +239,22 @@ function get_header_image_url($path) {
             <?php endif; ?>
         </ul>
         
-        <!-- Mobile Menu Toggle Button -->
+        <!-- FIXED Mobile Menu Toggle Button -->
         <div class="mobile-menu-toggle">
-            <i class='bx bx-menu'></i>
+            <span></span>
+            <span></span>
+            <span></span>
         </div>
     </header>
+
+    <!-- Load main.js which handles all the mobile menu functionality -->
+    <script src="<?php echo SITE_URL; ?>/assets/js/main.js"></script>
     
-    <!-- Add mobile menu JavaScript -->
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
-        const menuLinks = document.querySelector('.menu-link');
-        
-        if (mobileMenuToggle && menuLinks) {
-            mobileMenuToggle.addEventListener('click', function() {
-                menuLinks.classList.toggle('active');
-                this.classList.toggle('active');
-            });
-        }
-    });
-    </script>
+    <!-- Add page-specific JS if any -->
+    <?php if (isset($page_specific_js) && is_array($page_specific_js)): ?>
+        <?php foreach ($page_specific_js as $js): ?>
+            <script src="<?php echo SITE_URL . $js; ?>"></script>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</body>
+</html>

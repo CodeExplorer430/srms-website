@@ -1,5 +1,5 @@
 /**
- * St. Raphaela Mary School - Main JavaScript File
+ * St. Raphaela Mary School - Main JavaScript File - FIXED VERSION
  * This file contains all the common JavaScript functionality used across the website.
  */
 
@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initStickyHeader();
     initSlideshow();
     initMobileMenu();
+    adjustTableColumns();
 });
 
 /**
@@ -88,34 +89,47 @@ function initSlideshow() {
 }
 
 /**
- * Enhanced Mobile Menu Initialization
- * Adds improved submenu handling, click-outside behavior, and resize handling
+ * FIXED Mobile Menu Initialization
+ * Simplified and cleaned up mobile menu handling
  */
 function initMobileMenu() {
+    console.log('Initializing mobile menu...');
+    
     // Get menu elements
     const header = document.querySelector('header');
     const menuLinks = document.querySelector('.menu-link');
+    const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
     
-    if (!header || !menuLinks) return;
-    
-    // Create mobile menu toggle if it doesn't exist
-    let mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
-    
-    if (!mobileMenuToggle) {
-        // Create mobile menu toggle button (keeping your existing structure)
-        mobileMenuToggle = document.createElement('div');
-        mobileMenuToggle.className = 'mobile-menu-toggle';
-        mobileMenuToggle.innerHTML = '<span></span><span></span><span></span>';
-        
-        // Add mobile menu toggle to header
-        header.appendChild(mobileMenuToggle);
+    if (!header || !menuLinks || !mobileMenuToggle) {
+        console.log('Mobile menu elements not found:', {
+            header: !!header,
+            menuLinks: !!menuLinks,
+            mobileMenuToggle: !!mobileMenuToggle
+        });
+        return;
     }
     
-    // Toggle mobile menu on click (maintain existing behavior)
+    console.log('Mobile menu elements found, setting up event listeners...');
+    
+    // Toggle mobile menu on click
     mobileMenuToggle.addEventListener('click', function(e) {
-        e.stopPropagation(); // Prevent event from bubbling to document
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log('Mobile menu toggle clicked');
+        
+        // Toggle the menu
         menuLinks.classList.toggle('active');
-        this.classList.toggle('active');
+        mobileMenuToggle.classList.toggle('active');
+        
+        // Add/remove body scroll lock
+        if (menuLinks.classList.contains('active')) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        
+        console.log('Menu active:', menuLinks.classList.contains('active'));
     });
     
     // Enhanced submenu handling for mobile
@@ -135,6 +149,9 @@ function initMobileMenu() {
                     // Only handle specially on mobile view
                     if (window.innerWidth <= 768) {
                         e.preventDefault();
+                        e.stopPropagation();
+                        
+                        console.log('Submenu clicked:', this.textContent);
                         
                         // Close other open submenus
                         menuItemsWithDropdown.forEach(otherItem => {
@@ -145,6 +162,8 @@ function initMobileMenu() {
                         
                         // Toggle this submenu
                         item.classList.toggle('show-submenu');
+                        
+                        console.log('Submenu active:', item.classList.contains('show-submenu'));
                     }
                 });
                 
@@ -154,6 +173,11 @@ function initMobileMenu() {
                     link.addEventListener('click', function(e) {
                         // Allow these links to navigate when clicked
                         e.stopPropagation();
+                        
+                        // Close mobile menu when navigating
+                        menuLinks.classList.remove('active');
+                        mobileMenuToggle.classList.remove('active');
+                        document.body.style.overflow = '';
                     });
                 });
             }
@@ -167,9 +191,12 @@ function initMobileMenu() {
             !mobileMenuToggle.contains(e.target) && 
             menuLinks.classList.contains('active')) {
             
+            console.log('Clicking outside menu, closing...');
+            
             // Close main menu
             menuLinks.classList.remove('active');
             mobileMenuToggle.classList.remove('active');
+            document.body.style.overflow = '';
             
             // Close all submenus
             document.querySelectorAll('.menu-link > li.show-submenu').forEach(item => {
@@ -181,10 +208,13 @@ function initMobileMenu() {
     // Handle window resize
     window.addEventListener('resize', function() {
         if (window.innerWidth > 768) {
+            console.log('Screen resized to desktop, resetting menu...');
+            
             // Reset menu state on larger screens
             if (menuLinks.classList.contains('active')) {
                 menuLinks.classList.remove('active');
                 mobileMenuToggle.classList.remove('active');
+                document.body.style.overflow = '';
             }
             
             // Remove any show-submenu classes
@@ -193,45 +223,47 @@ function initMobileMenu() {
             });
         }
     });
+    
+    console.log('Mobile menu initialization complete');
+}
 
 /**
  * Adjust table columns based on screen size
  * Hides less important columns on mobile devices for better readability
  */
 function adjustTableColumns() {
-  const table = document.getElementById('usersTable');
-  
-  // Guard clause - only proceed if table exists
-  if (!table) return;
-  
-  const windowWidth = window.innerWidth;
-  
-  if (windowWidth < 768) {
-      // Hide less important columns on mobile
-      const hideCols = [2, 4]; // Role and Last Login columns
-      for (let i = 0; i < table.rows.length; i++) {
-          const cells = table.rows[i].cells;
-          for (let j = 0; j < hideCols.length; j++) {
-              if (cells[hideCols[j]]) {
-                  cells[hideCols[j]].style.display = 'none';
-              }
-          }
-      }
-  } else {
-      // Show all columns on larger screens
-      for (let i = 0; i < table.rows.length; i++) {
-          const cells = table.rows[i].cells;
-          for (let j = 0; j < cells.length; j++) {
-              cells[j].style.display = '';
-          }
-      }
-  }
+    const table = document.getElementById('usersTable');
+    
+    // Guard clause - only proceed if table exists
+    if (!table) return;
+    
+    const windowWidth = window.innerWidth;
+    
+    if (windowWidth < 768) {
+        // Hide less important columns on mobile
+        const hideCols = [2, 4]; // Role and Last Login columns
+        for (let i = 0; i < table.rows.length; i++) {
+            const cells = table.rows[i].cells;
+            for (let j = 0; j < hideCols.length; j++) {
+                if (cells[hideCols[j]]) {
+                    cells[hideCols[j]].style.display = 'none';
+                }
+            }
+        }
+    } else {
+        // Show all columns on larger screens
+        for (let i = 0; i < table.rows.length; i++) {
+            const cells = table.rows[i].cells;
+            for (let j = 0; j < cells.length; j++) {
+                cells[j].style.display = '';
+            }
+        }
+    }
 }
-  
-  // Call on page load and resize
-  window.addEventListener('load', adjustTableColumns);
-  window.addEventListener('resize', adjustTableColumns);
-}
+
+// Call on page load and resize
+window.addEventListener('load', adjustTableColumns);
+window.addEventListener('resize', adjustTableColumns);
 
 /**
  * Enhanced Image Path Handler for Media Library Integration
