@@ -1,7 +1,7 @@
 /**
  * Unified Image Uploader
  * Provides a single, consistent interface for image uploads and media library integration
- * Version: 1.1.0 (Enhanced path handling)
+ * Version: 2.0 (Hostinger Compatible)
  */
 (function() {
     // Main configuration
@@ -17,6 +17,9 @@
         mediaInsertButton: '.insert-media'    // Selector for media insert button
     };
 
+    // Environment detection
+    const isProduction = typeof window.SRMS_CONFIG !== 'undefined' && window.SRMS_CONFIG.IS_PRODUCTION;
+
     // State management
     let state = {
         mode: null,              // 'library' or 'upload'
@@ -30,7 +33,8 @@
 
     // Initialize when the DOM is fully loaded
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('🔄 Initializing Unified Image Uploader...');
+        console.log('🔄 Initializing Unified Image Uploader v2.0 (Hostinger Compatible)');
+        console.log('🔄 Environment:', isProduction ? 'Production' : 'Development');
         
         // Cache DOM elements
         elements = {
@@ -257,36 +261,45 @@
         };
     }
 
+    // Get project folder from URL for consistent handling
+    function getProjectFolder() {
+        // Get current URL components
+        const urlParts = window.location.pathname.split('/');
+        // Extract potential project folder (first segment after domain)
+        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        
+        // Don't return project folder in production if it's at root level
+        if (isProduction && (projectFolder === 'admin' || projectFolder === 'assets')) {
+            return '';
+        }
+        
+        return projectFolder;
+    }
+
     // Function to get absolute URL with project folder
     function getFullImageUrl(path) {
         // If already a full URL, return as is
         if (path.startsWith('http')) return path;
         
-        // Get protocol and domain
+        // Normalize path first
+        const normalizedPath = normalizePath(path);
+        
+        // Get origin and project folder
         const origin = window.location.origin;
+        const projectFolder = getProjectFolder();
         
-        // Get project folder from URL
-        const urlParts = window.location.pathname.split('/');
-        const projectFolder = urlParts[1] ? urlParts[1].toLowerCase() : '';
-        
-        // Make sure path starts with a slash
-        if (!path.startsWith('/')) {
-            path = '/' + path;
+        // Build URL based on environment
+        if (isProduction) {
+            // In production (Hostinger), don't add project folder
+            return origin + normalizedPath;
+        } else {
+            // In development, include project folder if available
+            if (projectFolder) {
+                return origin + '/' + projectFolder + normalizedPath;
+            } else {
+                return origin + normalizedPath;
+            }
         }
-        
-        // Do not add project folder if it's already in the path
-        const lowerPath = path.toLowerCase();
-        if (projectFolder && lowerPath.startsWith('/' + projectFolder.toLowerCase() + '/')) {
-            return origin + path;
-        }
-        
-        // Add project folder if it's not already in the path
-        if (projectFolder) {
-            return origin + '/' + projectFolder + path;
-        }
-        
-        // No project folder or already included in path
-        return origin + path;
     }
 
     // Activate library mode (for media library selections)
@@ -400,7 +413,7 @@
         }
     }
     
-    // Normalize path format
+    // Normalize path format with enhanced Hostinger compatibility
     function normalizePath(path) {
         if (!path) return '';
         
@@ -409,6 +422,14 @@
         
         // Remove any double slashes
         normalized = normalized.replace(/\/+/g, '/');
+        
+        // Get project folder
+        const projectFolder = getProjectFolder();
+        
+        // Remove project folder if it's in the path (to avoid duplication)
+        if (projectFolder && normalized.toLowerCase().startsWith('/' + projectFolder.toLowerCase() + '/')) {
+            normalized = normalized.substring(('/' + projectFolder).length);
+        }
         
         // Ensure path starts with a single slash
         normalized = '/' + normalized.replace(/^\/+/, '');
@@ -420,71 +441,88 @@
     }
 
     // Enhanced previewImage error handling
-    if (elements.previewImage) {
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!elements.previewImage) return;
+        
         elements.previewImage.addEventListener('error', function() {
             console.log('🔄 Image preview error for path:', this.src);
             
-            // Get project folder from URL
-            const urlParts = window.location.pathname.split('/');
-            const projectFolder = urlParts[1] ? urlParts[1].toLowerCase() : '';
+            // Get project folder and check environment
+            const projectFolder = getProjectFolder();
             console.log('🔄 Project folder detected:', projectFolder);
+            console.log('🔄 Environment:', isProduction ? 'Production' : 'Development');
             
-            // If projectFolder is found
-            if (projectFolder) {
-                // Extract base path without domain
-                let basePath = this.src;
-                if (basePath.startsWith(window.location.origin)) {
-                    basePath = basePath.substring(window.location.origin.length);
-                }
-                console.log('🔄 Base path:', basePath);
-                
-                // Build alternative paths to try
-                const alternativePaths = [];
-                
-                // 1. Try with project folder if not already present
-                if (!basePath.toLowerCase().includes('/' + projectFolder.toLowerCase() + '/')) {
-                    alternativePaths.push(window.location.origin + '/' + projectFolder + basePath);
-                }
-                
-                // 2. Try without project folder if already present
-                if (basePath.toLowerCase().includes('/' + projectFolder.toLowerCase() + '/')) {
-                    const pathWithoutProject = basePath.replace(new RegExp('/' + projectFolder + '/', 'i'), '/');
-                    alternativePaths.push(window.location.origin + pathWithoutProject);
-                }
-                
-                // 3. Try with filename only in various common directories
-                const filename = basePath.split('/').pop();
-                const imageCategories = ['news', 'events', 'promotional', 'campus', 'facilities', 'branding'];
-                
-                imageCategories.forEach(category => {
-                    alternativePaths.push(window.location.origin + '/' + projectFolder + '/assets/images/' + category + '/' + filename);
-                });
-                
-                console.log('🔄 Trying alternative paths:', alternativePaths);
-                
-                // Try each alternative path
-                let pathIndex = 0;
-                const tryNextPath = () => {
-                    if (pathIndex < alternativePaths.length) {
-                        console.log('🔄 Trying path:', alternativePaths[pathIndex]);
-                        this.src = alternativePaths[pathIndex++];
-                    } else {
-                        // If all paths fail, show error but don't prevent upload
-                        showError('Image preview unavailable, but upload should still work');
-                    }
-                };
-                
-                // Set up one-time event listener for the next attempt
-                this.addEventListener('error', tryNextPath, {once: true});
-                
-                // Start trying alternative paths
-                tryNextPath();
-            } else {
-                // Simple fallback if no project folder
-                showError('Image preview unavailable');
+            // Extract base path without domain
+            let basePath = this.src;
+            if (basePath.startsWith(window.location.origin)) {
+                basePath = basePath.substring(window.location.origin.length);
             }
+            console.log('🔄 Base path:', basePath);
+            
+            // Build alternative paths to try
+            const alternativePaths = [];
+            
+            // Production vs Development path handling
+            if (isProduction) {
+                // In production, try paths without project folder
+                alternativePaths.push(window.location.origin + basePath);
+                
+                // Try with /assets/ directly at root
+                const assetsMatch = basePath.match(/\/(?:assets|images)\/(.+)/);
+                if (assetsMatch) {
+                    alternativePaths.push(window.location.origin + '/assets/' + assetsMatch[1]);
+                }
+            } else {
+                // In development, try with and without project folder
+                if (projectFolder) {
+                    // 1. Try with project folder if not already present
+                    if (!basePath.toLowerCase().includes('/' + projectFolder.toLowerCase() + '/')) {
+                        alternativePaths.push(window.location.origin + '/' + projectFolder + basePath);
+                    }
+                    
+                    // 2. Try without project folder if already present
+                    if (basePath.toLowerCase().includes('/' + projectFolder.toLowerCase() + '/')) {
+                        const pathWithoutProject = basePath.replace(new RegExp('/' + projectFolder + '/', 'i'), '/');
+                        alternativePaths.push(window.location.origin + pathWithoutProject);
+                    }
+                }
+            }
+            
+            // 3. Try with filename only in various common directories
+            const filename = basePath.split('/').pop();
+            const imageCategories = ['news', 'events', 'promotional', 'campus', 'facilities', 'branding'];
+            
+            imageCategories.forEach(category => {
+                if (isProduction) {
+                    alternativePaths.push(window.location.origin + '/assets/images/' + category + '/' + filename);
+                } else if (projectFolder) {
+                    alternativePaths.push(window.location.origin + '/' + projectFolder + '/assets/images/' + category + '/' + filename);
+                } else {
+                    alternativePaths.push(window.location.origin + '/assets/images/' + category + '/' + filename);
+                }
+            });
+            
+            console.log('🔄 Trying alternative paths:', alternativePaths);
+            
+            // Try each alternative path
+            let pathIndex = 0;
+            const tryNextPath = () => {
+                if (pathIndex < alternativePaths.length) {
+                    console.log('🔄 Trying path:', alternativePaths[pathIndex]);
+                    this.src = alternativePaths[pathIndex++];
+                } else {
+                    // If all paths fail, show error but don't prevent upload
+                    showError('Image preview unavailable, but upload should still work');
+                }
+            };
+            
+            // Set up one-time event listener for the next attempt
+            this.addEventListener('error', tryNextPath, {once: true});
+            
+            // Start trying alternative paths
+            tryNextPath();
         });
-    }
+    });
     
     // Expose global interface for external scripts
     window.UnifiedImageUploader = {

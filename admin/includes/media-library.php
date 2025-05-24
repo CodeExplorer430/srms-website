@@ -1,19 +1,25 @@
 <?php
 /**
  * Media Library Component for SRMS Admin Panel
+ * Updated for Hostinger compatibility
+ * Version: 2.0
  */
 function get_media_library_assets() {
     // Get document root
     $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
     
-    // Get project folder from SITE_URL
+    // Enhanced environment detection
+    $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
+    
+    // Get project folder from SITE_URL with enhanced detection
     $project_folder = '';
-    if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-        $project_folder = $matches[1]; // Should be "srms-website"
+    if (!$is_production && preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // Should be "srms-website" in development
     }
     
     // Log information about the media scan
-    error_log("Media Library: Scanning with project folder: " . $project_folder);
+    error_log("Media Library: Scanning with environment: " . ($is_production ? "Production" : "Development"));
+    error_log("Media Library: Project folder: " . ($project_folder ? $project_folder : "None (root level)"));
     
     // Scan directories for images
     $media_categories = [
@@ -28,9 +34,9 @@ function get_media_library_assets() {
     $all_media = [];
     
     foreach ($media_categories as $category => $path) {
-        // Build the correct server path
+        // Build the correct server path - handle production vs development environments
         $server_path = $doc_root;
-        if (!empty($project_folder)) {
+        if (!$is_production && !empty($project_folder)) {
             $server_path .= DIRECTORY_SEPARATOR . $project_folder;
         }
         $server_path .= str_replace('/', DIRECTORY_SEPARATOR, $path);
@@ -59,9 +65,9 @@ function get_media_library_assets() {
                     // Get dimensions for the image
                     $dimensions = @getimagesize($full_path) ?: [0, 0];
                     
-                    // Generate web URL with project folder
+                    // Generate web URL based on environment
                     $web_url = '';
-                    if (!empty($project_folder)) {
+                    if (!$is_production && !empty($project_folder)) {
                         $web_url = '/' . $project_folder . $file_path;
                     } else {
                         $web_url = $file_path;
@@ -73,7 +79,7 @@ function get_media_library_assets() {
                     $media_files[] = [
                         'name' => $file,
                         'path' => $file_path,  // For internal references (relative path)
-                        'url' => $web_url,     // For browser URLs (with project folder)
+                        'url' => $web_url,     // For browser URLs (with or without project folder)
                         'size' => filesize($full_path),
                         'modified' => filemtime($full_path),
                         'dimensions' => $dimensions
@@ -93,6 +99,9 @@ function get_media_library_assets() {
 function render_media_library($target_field = 'image') {
     global $disable_media_library_preview;
     $media = get_media_library_assets();
+    
+    // Enhanced environment detection for JavaScript
+    $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
 ?>
 <div id="media-library-modal" class="media-library-modal">
     <div class="media-library-content">
@@ -202,6 +211,13 @@ function render_media_library($target_field = 'image') {
         </div>
     </div>
 </div>
+
+<script>
+// Add environment info for JavaScript
+window.SRMS_CONFIG = window.SRMS_CONFIG || {};
+window.SRMS_CONFIG.IS_PRODUCTION = <?php echo $is_production ? 'true' : 'false'; ?>;
+window.SRMS_CONFIG.SITE_URL = '<?php echo SITE_URL; ?>';
+</script>
 <?php
 }
 ?>

@@ -1,47 +1,78 @@
 /**
  * Media Library functionality for St. Raphaela Mary School Admin
- * Version: 3.3 (Enhanced path handling)
+ * Version: 4.0 (Hostinger Compatible)
  */
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Loading Media Library v3.3 (Enhanced path handling)');
+    console.log('Loading Media Library v4.0 (Hostinger Compatible)');
     
-    // Helper function to ensure path is correctly formatted
+    // Enhanced path handling for consistent behavior across environments
     function formatImagePath(path) {
         if (!path) return '';
         
-        // Remove any leading slashes
-        path = path.replace(/^\/+/, '');
+        // Replace backslashes with forward slashes
+        let formatted = path.replace(/\\/g, '/');
+        
+        // Remove any double slashes
+        formatted = formatted.replace(/\/+/g, '/');
         
         // Ensure path starts with a single slash
-        return '/' + path;
+        formatted = '/' + formatted.replace(/^\/+/, '');
+        
+        // Check for project folder prefix
+        const projectFolder = getProjectFolder();
+        if (projectFolder && formatted.toLowerCase().startsWith('/' + projectFolder.toLowerCase() + '/')) {
+            // Remove project folder from the beginning to avoid duplication
+            formatted = formatted.substring(('/' + projectFolder).length);
+            // Ensure it starts with a slash
+            formatted = '/' + formatted.replace(/^\/+/, '');
+        }
+        
+        console.log('Formatted image path:', formatted);
+        return formatted;
     }
     
-    // Utility function to get correct image URL with project folder
+    // Get project folder from URL for consistent handling
+    function getProjectFolder() {
+        // Get current URL components
+        const urlParts = window.location.pathname.split('/');
+        // Extract potential project folder (first segment after domain)
+        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        
+        // Don't return project folder in production if it's at root level
+        const isProduction = typeof window.SRMS_CONFIG !== 'undefined' && window.SRMS_CONFIG.IS_PRODUCTION;
+        if (isProduction && (projectFolder === 'admin' || projectFolder === 'assets')) {
+            return '';
+        }
+        
+        return projectFolder;
+    }
+    
+    // Generate correct image URLs that work in all environments
     function getCorrectImageUrl(path) {
         if (!path) return '';
         
+        // Format the path first
+        const formattedPath = formatImagePath(path);
+        
+        // Check for environment flag
+        const isProduction = typeof window.SRMS_CONFIG !== 'undefined' && window.SRMS_CONFIG.IS_PRODUCTION;
+        
         // Get current URL components
         const origin = window.location.origin;
-        const urlParts = window.location.pathname.split('/');
-        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        const projectFolder = getProjectFolder();
         
-        // Make sure path starts with a slash
-        if (!path.startsWith('/')) {
-            path = '/' + path;
+        // Build URL differently based on environment
+        if (isProduction) {
+            // In production (Hostinger), don't add project folder
+            return origin + formattedPath;
+        } else {
+            // In development, include project folder if available
+            if (projectFolder) {
+                return origin + '/' + projectFolder + formattedPath;
+            } else {
+                return origin + formattedPath;
+            }
         }
-        
-        // Don't add project folder if it's already in the path
-        if (projectFolder && path.toLowerCase().startsWith('/' + projectFolder.toLowerCase() + '/')) {
-            return origin + path;
-        }
-        
-        // Add project folder to path
-        if (projectFolder) {
-            return origin + '/' + projectFolder + path;
-        }
-        
-        // No project folder
-        return origin + path;
     }
     
     // Override the selectMediaItem global function if it exists
@@ -488,8 +519,19 @@ document.addEventListener('DOMContentLoaded', function() {
                         submitButton.disabled = true;
                     }
                     
+                    // Detect environment for proper AJAX URL
+                    const isProduction = typeof window.SRMS_CONFIG !== 'undefined' && window.SRMS_CONFIG.IS_PRODUCTION;
+                    const projectFolder = getProjectFolder();
+                    
+                    // Construct proper AJAX URL based on environment
+                    let ajaxUrl = isProduction ? 
+                        '/admin/ajax/upload-media.php' : 
+                        (projectFolder ? `/${projectFolder}/admin/ajax/upload-media.php` : '/admin/ajax/upload-media.php');
+                    
+                    console.log('AJAX upload URL:', ajaxUrl);
+                    
                     // Send AJAX request
-                    fetch('../admin/ajax/upload-media.php', {
+                    fetch(ajaxUrl, {
                         method: 'POST',
                         body: formData
                     })
@@ -554,7 +596,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         
                         if (path) {
-                            // Format path correctly
+                            // Format path correctly - remove project folder if present
+                            const projectFolder = getProjectFolder();
+                            if (projectFolder && path.toLowerCase().startsWith('/' + projectFolder.toLowerCase() + '/')) {
+                                path = path.substring(('/' + projectFolder).length);
+                            }
+                            
                             path = path.replace(/^\/+/, '');
                             path = '/' + path;
                             
@@ -583,6 +630,22 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         }
     }, 500);
+    
+    // Helper function to get project folder
+    function getProjectFolder() {
+        // Get current URL components
+        const urlParts = window.location.pathname.split('/');
+        // Extract potential project folder (first segment after domain)
+        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        
+        // Don't return project folder in production if it's at root level
+        const isProduction = typeof window.SRMS_CONFIG !== 'undefined' && window.SRMS_CONFIG.IS_PRODUCTION;
+        if (isProduction && (projectFolder === 'admin' || projectFolder === 'assets')) {
+            return '';
+        }
+        
+        return projectFolder;
+    }
 });
 
 // Make sure our global selectMediaItem function is only called once

@@ -1,6 +1,16 @@
 <?php
+/**
+ * AJAX Bulk Upload Handler
+ * Updated for Hostinger compatibility
+ * Version: 2.0
+ */
+
 // Start with a clean output buffer to capture any unexpected output
 ob_start();
+
+// Set up enhanced logging
+ini_set('log_errors', 1);
+error_log("===== BULK UPLOAD REQUEST: " . date('Y-m-d H:i:s') . " =====");
 
 // Suppress all errors from being output (but still log them)
 error_reporting(E_ALL);
@@ -10,6 +20,10 @@ session_start();
 
 // Include environment settings
 require_once '../../environment.php';
+
+// Log environment info
+error_log("Environment: " . (defined('IS_PRODUCTION') && IS_PRODUCTION ? 'Production' : 'Development'));
+error_log("Server Type: " . (defined('SERVER_TYPE') ? SERVER_TYPE : 'Unknown'));
 
 // Security check
 if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
@@ -41,6 +55,18 @@ if(!in_array($category, ['news', 'events', 'promotional', 'facilities', 'campus'
 try {
     // Log for debugging
     error_log("Bulk upload: Starting file processing for category '{$category}' with " . count($_FILES['bulk_files']['name']) . " files");
+    
+    // Environment-specific path handling
+    $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
+    
+    // Determine project folder
+    $project_folder = '';
+    if (!$is_production && preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+        $project_folder = $matches[1]; // Only use in development
+    }
+    
+    error_log("Bulk upload: Environment: " . ($is_production ? 'Production' : 'Development'));
+    error_log("Bulk upload: Project folder: " . ($project_folder ? $project_folder : 'None (root level)'));
     
     $results = [];
     $success_count = 0;
@@ -79,10 +105,24 @@ try {
             // Ensure the path uses forward slashes for web URLs
             $web_path = str_replace('\\', '/', $upload_result);
             
+            // Generate display path based on environment
+            if (!$is_production && !empty($project_folder)) {
+                // In development, include project folder in the URL if not already there
+                if (strpos($web_path, '/' . $project_folder) !== 0) {
+                    $display_path = '/' . $project_folder . $web_path;
+                } else {
+                    $display_path = $web_path;
+                }
+            } else {
+                // In production, use path as is
+                $display_path = $web_path;
+            }
+            
             $results[] = [
                 'filename' => $temp_file['name'],
                 'success' => true,
-                'path' => $web_path
+                'path' => $web_path,
+                'display_path' => $display_path
             ];
             $success_count++;
             error_log("Bulk upload: Successfully uploaded '{$temp_file['name']}' to '{$web_path}'");

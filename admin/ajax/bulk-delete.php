@@ -1,4 +1,10 @@
 <?php
+/**
+ * AJAX Bulk Delete Handler
+ * Updated for Hostinger compatibility
+ * Version: 2.0
+ */
+
 // Start with a clean output buffer to capture any unexpected output
 ob_start();
 
@@ -19,6 +25,10 @@ session_start();
 
 // Include environment settings
 require_once '../../environment.php';
+
+// Log environment info
+error_log("Environment: " . (defined('IS_PRODUCTION') && IS_PRODUCTION ? 'Production' : 'Development'));
+error_log("Server Type: " . (defined('SERVER_TYPE') ? SERVER_TYPE : 'Unknown'));
 
 // Security check
 if(!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
@@ -51,12 +61,17 @@ $files_to_delete = $data['files'];
 $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
 error_log("Document root: {$doc_root}");
 
-// Determine project folder from SITE_URL
+// Environment-specific path handling
+$is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
+
+// Determine project folder
 $project_folder = '';
-if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-    $project_folder = $matches[1]; // Should be "srms-website"
+if (!$is_production && preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+    $project_folder = $matches[1]; // Only use in development
 }
-error_log("Project folder: {$project_folder}");
+
+error_log("Environment: " . ($is_production ? 'Production' : 'Development'));
+error_log("Project folder: " . ($project_folder ? $project_folder : 'None (root level)'));
 error_log("SITE_URL: " . SITE_URL);
 
 // Validate media directories (allowed paths for deletion)
@@ -93,15 +108,15 @@ try {
         // 1. Original path
         $possible_paths[] = $original_path;
         
-        // 2. Extract path relative to project folder
-        if (!empty($project_folder) && strpos($file_path, '/' . $project_folder . '/') === 0) {
+        // 2. Extract path relative to project folder (only in development)
+        if (!$is_production && !empty($project_folder) && strpos($file_path, '/' . $project_folder . '/') === 0) {
             $stripped_path = substr($file_path, strlen('/' . $project_folder));
             $possible_paths[] = $stripped_path;
             error_log("Stripped project folder path: {$stripped_path}");
         }
         
-        // 3. Path with normalized format
-        $normalized_path = normalize_image_path($file_path);
+        // 3. Path with normalized format (remove all leading slashes and add just one)
+        $normalized_path = '/' . ltrim($file_path, '/');
         $possible_paths[] = $normalized_path;
         error_log("Normalized path: {$normalized_path}");
         
@@ -127,20 +142,27 @@ try {
         $is_allowed = false;
         
         foreach ($possible_paths as $test_path) {
-            // Build full server path for this test path
-            $test_full_path = $doc_root;
-            if (!empty($project_folder)) {
-                $test_full_path .= DIRECTORY_SEPARATOR . $project_folder;
+            // Build full server path for this test path based on environment
+            if ($is_production) {
+                // In production, the file should be directly in document root
+                $test_full_path = $doc_root . str_replace('/', DIRECTORY_SEPARATOR, $test_path);
+            } else {
+                // In development, include project folder if specified
+                if (!empty($project_folder)) {
+                    $test_full_path = $doc_root . DIRECTORY_SEPARATOR . $project_folder . 
+                                     str_replace('/', DIRECTORY_SEPARATOR, $test_path);
+                } else {
+                    $test_full_path = $doc_root . str_replace('/', DIRECTORY_SEPARATOR, $test_path);
+                }
             }
-            $test_full_path .= str_replace('/', DIRECTORY_SEPARATOR, $test_path);
             
             error_log("Testing path: {$test_full_path}");
             
             // Verify this path is within allowed directories first
             $path_allowed = false;
             foreach ($media_directories as $dir) {
-                $normalized_dir = normalize_image_path($dir);
-                $normalized_test = normalize_image_path($test_path);
+                $normalized_dir = '/' . ltrim($dir, '/');
+                $normalized_test = '/' . ltrim($test_path, '/');
                 if (strpos($normalized_test, $normalized_dir) === 0) {
                     $path_allowed = true;
                     break;
@@ -162,7 +184,7 @@ try {
             }
         }
         
-        // If still not found, try direct paths without project folder
+        // If still not found, try direct paths without project folder (even in development)
         if (!$file_exists) {
             foreach ($possible_paths as $test_path) {
                 $direct_path = $doc_root . str_replace('/', DIRECTORY_SEPARATOR, $test_path);
@@ -171,8 +193,8 @@ try {
                 // Verify this path is within allowed directories first
                 $path_allowed = false;
                 foreach ($media_directories as $dir) {
-                    $normalized_dir = normalize_image_path($dir);
-                    $normalized_test = normalize_image_path($test_path);
+                    $normalized_dir = '/' . ltrim($dir, '/');
+                    $normalized_test = '/' . ltrim($test_path, '/');
                     if (strpos($normalized_test, $normalized_dir) === 0) {
                         $path_allowed = true;
                         break;
