@@ -1,5 +1,5 @@
 RewriteEngine On
-RewriteBase /srms-website/
+RewriteBase /
 
 # Redirect old HTML files to PHP equivalents
 RewriteCond %{REQUEST_FILENAME} !-f
@@ -22,8 +22,26 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.*)$ $1.php [L]
 
-# PHP settings for file uploads
-<IfModule mod_php7.c>
+# Error handling
+ErrorDocument 404 /404.php
+ErrorDocument 500 /500.php
+
+# Security headers
+Header always set X-Content-Type-Options nosniff
+Header always set X-Frame-Options DENY
+Header always set X-XSS-Protection "1; mode=block"
+
+# PHP settings for file uploads (Hostinger uses LiteSpeed, so different syntax)
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+    php_value memory_limit 128M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+</IfModule>
+
+# For LiteSpeed (Hostinger's server)
+<IfModule Litespeed>
     php_value upload_max_filesize 10M
     php_value post_max_size 12M
     php_value memory_limit 128M

@@ -400,7 +400,7 @@ ob_start();
                             <i class='bx bx-plus'></i>
                             <span>Add News</span>
                         </a>
-                        <a href="maintenance/setup-directories.php" class="quick-action-btn">
+                        <a href="tools/maintenance/setup-directories.php" class="quick-action-btn">
                             <i class='bx bx-folder-plus'></i>
                             <span>Setup Directories</span>
                         </a>

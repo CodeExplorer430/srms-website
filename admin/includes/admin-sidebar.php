@@ -1,9 +1,7 @@
 <?php
 /**
  * Admin Sidebar Component
- * This file provides a consistent sidebar across all admin pages
- * 
- * Updated to include improved tools section
+ * Updated to work with existing environment configuration
  */
 
 // Get current page to highlight active menu item
@@ -12,32 +10,29 @@ $current_folder = dirname($_SERVER['PHP_SELF']);
 $current_folder = basename($current_folder); 
 $is_in_tools = (strpos($_SERVER['PHP_SELF'], '/admin/tools/') !== false);
 
-// BULLETPROOF PATH CALCULATION
-// Explicitly calculate the depth using full path analysis
-$current_path = $_SERVER['PHP_SELF'];
-
-// Debug the paths for troubleshooting
-// echo "<!-- Current Path: " . $current_path . " -->";
-
-// Simple absolute URL approach (most reliable)
-$assets_path = '/srms-website/assets';
-$admin_path = '/srms-website/admin/';
-
-// If you need relative paths, use this more robust calculation
-if (false) { // Disabled in favor of absolute paths
+// Calculate paths based on environment
+function calculate_paths() {
+    global $is_in_tools;
+    
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // For Hostinger production, use absolute paths
+        return [
+            'assets_path' => '/assets',
+            'admin_path' => '/admin/'
+        ];
+    }
+    
+    // For development, calculate relative paths
     if ($is_in_tools) {
-        // Count slashes after /admin/tools/ to determine depth
+        $current_path = $_SERVER['PHP_SELF'];
         $path_parts = explode('/admin/tools/', $current_path);
         if (isset($path_parts[1])) {
             $subpath = $path_parts[1];
             $slash_count = substr_count($subpath, '/');
             
-            // For main tools directory: ../../assets
-            // For subdirectories (content/, media/, etc): ../../../assets
             $assets_path = str_repeat('../', 2 + $slash_count) . 'assets';
             $admin_path = str_repeat('../', 1 + $slash_count);
         } else {
-            // Fallback for main tools directory
             $assets_path = '../../assets';
             $admin_path = '../';
         }
@@ -45,22 +40,21 @@ if (false) { // Disabled in favor of absolute paths
         $assets_path = '../assets';
         $admin_path = '';
     }
-}
-?>
-<?php
-// Get school logo from database at the top of the file after path calculations
-
-// First make sure we have the DB connection (include if needed)
-if (!class_exists('Database')) {
-    if (file_exists($_SERVER['DOCUMENT_ROOT'] . '/srms-website/includes/db.php')) {
-        require_once $_SERVER['DOCUMENT_ROOT'] . '/srms-website/includes/db.php';
-    }
+    
+    return [
+        'assets_path' => $assets_path,
+        'admin_path' => $admin_path
+    ];
 }
 
-// Get logo path with fallback
-$school_logo = '/assets/images/branding/logo-primary.png'; // Default fallback
+$paths = calculate_paths();
+$assets_path = $paths['assets_path'];
+$admin_path = $paths['admin_path'];
 
-// Try to get from database if Database class is available
+// Get school logo with error handling
+$school_logo = '/images/branding/logo-primary.png'; // Default fallback
+
+// Try to get from database if available
 if (class_exists('Database')) {
     try {
         $db = new Database();
@@ -69,20 +63,24 @@ if (class_exists('Database')) {
             $school_logo = $school_info['logo'];
         }
     } catch (Exception $e) {
-        // Silently fall back to default if error occurs
         error_log("Error fetching logo from database: " . $e->getMessage());
     }
 }
 
-// Make sure logo path starts with a slash
+// Normalize logo path
 if (substr($school_logo, 0, 1) !== '/') {
     $school_logo = '/' . $school_logo;
 }
+
+// Build final logo URL
+$logo_url = $assets_path . $school_logo;
 ?>
 <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <!-- FIXED LOGO PATH: Uses absolute path -->
-       <img src="<?php echo $assets_path . $school_logo; ?>" alt="St. Raphaela Mary School Logo" class="logo-img" onerror="this.src='<?php echo $assets_path; ?>/images/branding/logo-primary.png';">
+        <img src="<?php echo htmlspecialchars($logo_url); ?>" 
+             alt="St. Raphaela Mary School Logo" 
+             class="logo-img" 
+             onerror="this.onerror=null; this.src='<?php echo $assets_path; ?>/images/branding/logo-primary.png';">
         <h3 class="logo-text">SRMS Admin</h3>
         <button id="sidebar-toggle" class="sidebar-toggle">
             <i class='bx bx-chevron-left'></i>
@@ -175,19 +173,22 @@ if (substr($school_logo, 0, 1) !== '/') {
     <div class="sidebar-footer">
         <div class="admin-tools">
             <h4 class="tools-header">Quick Tools</h4>
-            <a href="<?php echo $admin_path; ?>tools/maintenance/setup-directories.php" class="tool-item">
+            
+            <?php $tools_base = $admin_path . 'tools/'; ?>
+            
+            <a href="<?php echo $tools_base; ?>maintenance/setup-directories.php" class="tool-item">
                 <i class='bx bx-folder-plus'></i>
                 <span class="menu-text">Setup Directories</span>
             </a>
-            <a href="<?php echo $admin_path; ?>tools/media/upload-tester.php" class="tool-item">
+            <a href="<?php echo $tools_base; ?>media/upload-tester.php" class="tool-item">
                 <i class='bx bx-upload'></i>
                 <span class="menu-text">Upload Tester</span>
             </a>
-            <a href="<?php echo $admin_path; ?>tools/system/environment-check.php" class="tool-item">
+            <a href="<?php echo $tools_base; ?>system/environment-check.php" class="tool-item">
                 <i class='bx bx-check-shield'></i>
                 <span class="menu-text">System Check</span>
             </a>
-            <a href="<?php echo $admin_path; ?>tools/maintenance/fix-paths.php" class="tool-item">
+            <a href="<?php echo $tools_base; ?>maintenance/fix-paths.php" class="tool-item">
                 <i class='bx bx-link-alt'></i>
                 <span class="menu-text">Fix Paths</span>
             </a>
@@ -202,6 +203,12 @@ if (substr($school_logo, 0, 1) !== '/') {
                 <i class='bx bx-server'></i>
                 <span class="menu-text"><?php echo defined('SERVER_TYPE') ? SERVER_TYPE : 'Server'; ?></span>
             </div>
+            <?php if (defined('IS_DEVELOPMENT') && IS_DEVELOPMENT): ?>
+            <div class="env-indicator">
+                <i class='bx bx-code-alt'></i>
+                <span class="menu-text" style="color: #ff6b6b;">DEV</span>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -210,42 +217,68 @@ if (substr($school_logo, 0, 1) !== '/') {
     // Update server time
     function updateServerTime() {
         const now = new Date();
-        const timeString = now.toLocaleTimeString();
-        const dateString = now.toLocaleDateString();
-        document.getElementById('server-time').textContent = `${dateString} ${timeString}`;
+        const timeString = now.toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        const dateString = now.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric'
+        });
+        
+        const timeElement = document.getElementById('server-time');
+        if (timeElement) {
+            timeElement.textContent = `${dateString} ${timeString}`;
+        }
     }
     
-    // Call immediately and then update every second
+    // Call immediately and then update every minute
     updateServerTime();
-    setInterval(updateServerTime, 1000);
+    setInterval(updateServerTime, 60000);
     
     // Sidebar toggle functionality
-    document.getElementById('sidebar-toggle').addEventListener('click', function() {
-        document.body.classList.toggle('sidebar-collapsed');
-        
-        // Save state to localStorage
-        const isCollapsed = document.body.classList.contains('sidebar-collapsed');
-        localStorage.setItem('sidebar-collapsed', isCollapsed ? 'true' : 'false');
-        
-        // Change the toggle icon
-        const icon = this.querySelector('i');
-        if (isCollapsed) {
-            icon.classList.remove('bx-chevron-left');
-            icon.classList.add('bx-chevron-right');
-        } else {
-            icon.classList.remove('bx-chevron-right');
-            icon.classList.add('bx-chevron-left');
-        }
-    });
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', function() {
+            document.body.classList.toggle('sidebar-collapsed');
+            
+            // Save state to localStorage
+            const isCollapsed = document.body.classList.contains('sidebar-collapsed');
+            try {
+                localStorage.setItem('sidebar-collapsed', isCollapsed ? 'true' : 'false');
+            } catch (e) {
+                console.warn('Could not save sidebar state:', e);
+            }
+            
+            // Change the toggle icon
+            const icon = this.querySelector('i');
+            if (icon) {
+                if (isCollapsed) {
+                    icon.classList.remove('bx-chevron-left');
+                    icon.classList.add('bx-chevron-right');
+                } else {
+                    icon.classList.remove('bx-chevron-right');
+                    icon.classList.add('bx-chevron-left');
+                }
+            }
+        });
+    }
     
     // Check saved state on page load
     document.addEventListener('DOMContentLoaded', function() {
-        const isCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
-        if (isCollapsed) {
-            document.body.classList.add('sidebar-collapsed');
-            const icon = document.querySelector('#sidebar-toggle i');
-            icon.classList.remove('bx-chevron-left');
-            icon.classList.add('bx-chevron-right');
+        try {
+            const isCollapsed = localStorage.getItem('sidebar-collapsed') === 'true';
+            if (isCollapsed) {
+                document.body.classList.add('sidebar-collapsed');
+                const icon = document.querySelector('#sidebar-toggle i');
+                if (icon) {
+                    icon.classList.remove('bx-chevron-left');
+                    icon.classList.add('bx-chevron-right');
+                }
+            }
+        } catch (e) {
+            console.warn('Could not load sidebar state:', e);
         }
     });
 </script>
