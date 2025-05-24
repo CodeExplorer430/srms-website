@@ -1,6 +1,8 @@
 <?php
 /**
  * School Settings Page
+ * Updated for Hostinger compatibility
+ * Version: 2.0 - Works with existing CSS files
  */
 
 // Start session and include necessary files
@@ -8,20 +10,24 @@ session_start();
 
 // Check login status
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: ../admin/login.php');
+    header('Location: ' . (defined('IS_PRODUCTION') && IS_PRODUCTION ? '/admin/login.php' : 'login.php'));
     exit;
 }
 
 // Include database connection and functions
 include_once '../includes/config.php';
 include_once '../includes/db.php';
-include_once '../includes/functions.php'; // Make sure to include functions.php
+include_once '../includes/functions.php';
 $db = new Database();
+
+// Enhanced environment detection
+$is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
 
 // Initialize variables
 $errors = [];
 $warnings = [];
 $success = false;
+$upload_result = false;
 
 // Get school information
 $school_info = $db->fetch_row("SELECT * FROM school_information LIMIT 1");
@@ -70,7 +76,33 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Address is required';
     }
     
-    // Normalize image path using our robust path handling functions
+    // Process image upload if a new file is uploaded
+    if (isset($_FILES['logo_upload']) && $_FILES['logo_upload']['error'] != UPLOAD_ERR_NO_FILE) {
+        error_log('Settings: Processing logo upload for file: ' . $_FILES['logo_upload']['name']);
+        
+        $upload_result = upload_image($_FILES['logo_upload'], 'branding');
+        if ($upload_result) {
+            // Use the new image path immediately
+            $logo = $upload_result;
+            error_log("Settings: Successfully uploaded logo to path: {$logo}");
+            
+            // Add a small delay to ensure file is written to disk
+            usleep(500000); // 0.5 second delay
+            clearstatcache();
+            
+            // Log verification
+            if (verify_image_exists($logo)) {
+                error_log("Settings: Verified uploaded logo exists at path: {$logo}");
+            } else {
+                error_log("Settings: WARNING - Uploaded logo not found at path: {$logo}");
+                $warnings[] = "Logo was uploaded successfully but verification check failed. The logo may not display correctly.";
+            }
+        } else {
+            $errors[] = 'Logo upload failed. Please check file type, size, and server permissions.';
+        }
+    }
+    
+    // Normalize image path using enhanced path handling
     if (!empty($logo)) {
         // Use the normalize_image_path function to ensure consistent paths
         $logo = normalize_image_path($logo);
@@ -91,27 +123,23 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
          
-        // If path is invalid but not empty, provide more guidance
+        // If path is invalid but not empty, provide guidance
         if (!$valid_image_path) {
-            // Suggest correction to proper path
             $suggested_path = '/assets/images/branding/' . basename($logo);
-            $errors[] = 'Invalid logo path. Images should be located in one of the allowed directories. Did you mean: "' . $suggested_path . '"?';
+            $errors[] = 'Invalid logo path. Logo should be in the branding directory. Did you mean: "' . $suggested_path . '"?';
         }
          
-        // Verify file exists using our robust file existence check
-        if ($valid_image_path) {
-            // Use the robust verify_image_exists function
-            if (!verify_image_exists($logo)) {
-                $warnings[] = 'Logo file not found at "' . $logo . '". Please check the path or upload the image first.';
-            }
+        // Verify file exists using enhanced verification
+        if ($valid_image_path && !verify_image_exists($logo)) {
+            $warnings[] = 'Logo file not found at "' . $logo . '". Please check the path or upload the image first.';
         }
     }
-
-    $logo = $db->escape($logo);
     
     // Process if no errors
     if(empty($errors)) {
+        // Escape all values for database
         $name = $db->escape($name);
+        $logo = $db->escape($logo);
         $mission = $db->escape($mission);
         $vision = $db->escape($vision);
         $philosophy = $db->escape($philosophy);
@@ -147,16 +175,6 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Helper function for admin panel to display the correct image URL
-function get_settings_image_url($path) {
-    if (empty($path)) return '';
-    
-    // Use the function from functions.php to get the correct URL
-    return get_correct_image_url(normalize_image_path($path));
-}
-
-$disable_media_library_preview = true;
-
 // Start output buffer for main content
 ob_start();
 ?>
@@ -175,7 +193,7 @@ ob_start();
             <strong>Please correct the following errors:</strong>
             <ul class="mt-2 mb-0">
                 <?php foreach($errors as $error): ?>
-                    <li><?php echo $error; ?></li>
+                    <li><?php echo htmlspecialchars($error); ?></li>
                 <?php endforeach; ?>
             </ul>
         </div>
@@ -188,7 +206,7 @@ ob_start();
         <div>
             <ul>
                 <?php foreach ($warnings as $warning): ?>
-                <li><?php echo $warning; ?></li>
+                <li><?php echo htmlspecialchars($warning); ?></li>
                 <?php endforeach; ?>
             </ul>
         </div>
@@ -202,14 +220,15 @@ ob_start();
     <div class="panel-body">
         <form action="settings.php" method="post" enctype="multipart/form-data">
             <div class="form-section">
-                <h4 class="section-title">Basic Information</h4>
+                <h4 class="section-title"><i class='bx bxs-info-circle'></i> Basic Information</h4>
+                
                 <div class="form-group">
                     <label for="name">School Name</label>
-                    <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($school_info['name']); ?>" required>
+                    <input type="text" id="name" name="name" class="form-control" value="<?php echo htmlspecialchars($school_info['name']); ?>" required>
                 </div>
                 
                 <div class="form-group">
-                    <label for="logo">Logo Path</label>
+                    <label for="logo">School Logo</label>
                     <div class="image-input-group">
                         <input type="text" id="logo" name="logo" class="form-control" value="<?php echo htmlspecialchars($school_info['logo']); ?>">
                         <button type="button" class="btn btn-primary open-media-library" data-target="logo">
@@ -223,13 +242,9 @@ ob_start();
                             <div id="preview-placeholder" class="preview-placeholder" style="<?php echo !empty($school_info['logo']) ? 'display: none;' : ''; ?>">
                                 <i class='bx bx-image'></i>
                                 <span>No logo selected</span>
-                                <small>Select from media library</small>
+                                <small>Select from media library or upload new logo</small>
                             </div>
-                            <?php
-                            // FIXED: Use the get_settings_image_url function to get the correct image URL
-                            $logo_url = !empty($school_info['logo']) ? get_settings_image_url($school_info['logo']) : '';
-                            ?>
-                            <img src="<?php echo htmlspecialchars($logo_url); ?>" 
+                            <img src="<?php echo !empty($school_info['logo']) ? htmlspecialchars(get_correct_image_url($school_info['logo'])) : ''; ?>" 
                                 alt="School Logo" 
                                 id="preview-image" 
                                 style="<?php echo empty($school_info['logo']) ? 'display: none;' : ''; ?>">
@@ -240,41 +255,31 @@ ob_start();
                             <?php endif; ?>
                         </div>
                     </div>
+
+                    <div class="form-group">
+                        <label for="logo_upload">Upload New Logo</label>
+                        <input type="file" id="logo_upload" name="logo_upload" accept="image/jpeg, image/png, image/gif">
+                        <small class="form-text">Max file size: 2MB. Accepted formats: JPEG, PNG, GIF</small>
+                    </div>
                 </div>
                 
                 <?php if (!empty($school_info['logo'])): 
-                    // FIXED: Use our robust functions for image verification
                     $logo_exists = verify_image_exists($school_info['logo']);
                     $best_match = '';
                     if (!$logo_exists && function_exists('find_best_matching_image')) {
                         $best_match = find_best_matching_image($school_info['logo']);
                     }
                 ?>
-                    <div class="image-verification <?php echo $logo_exists ? 'success' : 'error'; ?>">
+                    <div class="image-verification <?php echo ($logo_exists || $best_match) ? 'success' : 'error'; ?>">
                         <?php if ($logo_exists): ?>
-                            <i class='bx bx-check-circle'></i> Logo file exists at this path
+                            <i class='bx bx-check-circle'></i> Logo file exists and is accessible
                         <?php elseif ($best_match): ?>
                             <i class='bx bx-check-circle'></i> Similar logo found at: <?php echo htmlspecialchars($best_match); ?>
                         <?php else: ?>
                             <i class='bx bx-x-circle'></i> Logo file not found at this path
-                            <div class="path-details">
-                                <?php
-                                // Get server paths for debugging
-                                $server_root = $_SERVER['DOCUMENT_ROOT'];
-                                $project_folder = '';
-                                if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-                                    $project_folder = $matches[1]; // Should be "srms-website"
-                                }
-                                
-                                $path1 = $server_root . ($project_folder ? DIRECTORY_SEPARATOR . $project_folder : '') . 
-                                        str_replace('/', DIRECTORY_SEPARATOR, normalize_image_path($school_info['logo']));
-                                $path2 = $server_root . str_replace('/', DIRECTORY_SEPARATOR, normalize_image_path($school_info['logo']));
-                                ?>
-                                Tried: <?php echo htmlspecialchars($path1); ?><br>
-                                And: <?php echo htmlspecialchars($path2); ?>
-                            </div>
                             <div class="path-suggestion">
                                 <p>The logo should be placed in <code>/assets/images/branding/</code> directory.</p>
+                                <p>Use the media library to browse available images or upload a new logo.</p>
                             </div>
                         <?php endif; ?>
                     </div>
@@ -282,44 +287,49 @@ ob_start();
             </div>
             
             <div class="form-section">
-                <h4 class="section-title">Contact Information</h4>
+                <h4 class="section-title"><i class='bx bxs-contact'></i> Contact Information</h4>
+                
                 <div class="row">
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($school_info['email']); ?>" required>
+                            <label for="email">Email Address</label>
+                            <input type="email" id="email" name="email" class="form-control" value="<?php echo htmlspecialchars($school_info['email']); ?>" required>
                         </div>
                     </div>
                     
                     <div class="col-md-6">
                         <div class="form-group">
-                            <label for="phone">Phone</label>
-                            <input type="tel" id="phone" name="phone" value="<?php echo htmlspecialchars($school_info['phone']); ?>" required>
+                            <label for="phone">Phone Number</label>
+                            <input type="tel" id="phone" name="phone" class="form-control" value="<?php echo htmlspecialchars($school_info['phone']); ?>" required>
                         </div>
                     </div>
                 </div>
                 
                 <div class="form-group">
-                    <label for="address">Address</label>
-                    <textarea id="address" name="address" required><?php echo htmlspecialchars($school_info['address']); ?></textarea>
+                    <label for="address">School Address</label>
+                    <textarea id="address" name="address" class="form-control" rows="3" required><?php echo htmlspecialchars($school_info['address']); ?></textarea>
                 </div>
             </div>
             
             <div class="form-section">
-                <h4 class="section-title">School Philosophy</h4>
+                <h4 class="section-title"><i class='bx bxs-graduation'></i> School Philosophy</h4>
+                
                 <div class="form-group">
-                    <label for="mission">Mission</label>
-                    <textarea id="mission" name="mission" rows="5"><?php echo htmlspecialchars($school_info['mission']); ?></textarea>
+                    <label for="mission">Mission Statement</label>
+                    <textarea id="mission" name="mission" class="form-control" rows="5"><?php echo htmlspecialchars($school_info['mission']); ?></textarea>
+                    <small class="form-text">Describe the school's purpose and primary objectives.</small>
                 </div>
                 
                 <div class="form-group">
-                    <label for="vision">Vision</label>
-                    <textarea id="vision" name="vision" rows="5"><?php echo htmlspecialchars($school_info['vision']); ?></textarea>
+                    <label for="vision">Vision Statement</label>
+                    <textarea id="vision" name="vision" class="form-control" rows="5"><?php echo htmlspecialchars($school_info['vision']); ?></textarea>
+                    <small class="form-text">Describe the school's aspirations and future goals.</small>
                 </div>
                 
                 <div class="form-group">
-                    <label for="philosophy">Philosophy</label>
-                    <textarea id="philosophy" name="philosophy" rows="5"><?php echo htmlspecialchars($school_info['philosophy']); ?></textarea>
+                    <label for="philosophy">Educational Philosophy</label>
+                    <textarea id="philosophy" name="philosophy" class="form-control" rows="5"><?php echo htmlspecialchars($school_info['philosophy']); ?></textarea>
+                    <small class="form-text">Describe the school's approach to education and core beliefs.</small>
                 </div>
             </div>
             
@@ -327,276 +337,441 @@ ob_start();
                 <button type="submit" class="btn btn-primary">
                     <i class='bx bx-save'></i> Save Settings
                 </button>
+                <button type="button" class="btn btn-secondary" onclick="window.location.reload();">
+                    <i class='bx bx-refresh'></i> Reset Form
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-<style>
-    .form-section {
-        margin-bottom: 30px;
-        padding-bottom: 20px;
-        border-bottom: 1px solid var(--border-color);
-    }
+<script>
+/**
+ * Settings Page JavaScript
+ * Enhanced for Hostinger compatibility
+ * Version: 2.0 - Works with existing CSS
+ */
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing Settings page with enhanced media library integration...');
     
-    .form-section:last-child {
-        border-bottom: none;
-    }
+    // Environment configuration
+    const isProduction = typeof window.SRMS_CONFIG !== 'undefined' && window.SRMS_CONFIG.IS_PRODUCTION;
     
-    .section-title {
-        color: var(--primary-color);
-        font-size: 18px;
-        font-weight: 600;
-        margin-bottom: 15px;
-    }
-    
-    .image-input-group {
-        display: flex;
-        gap: 10px;
-    }
-    
-    .image-preview-container {
-        margin-top: 15px;
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        padding: 10px;
-        background-color: #f8f9fa;
-    }
-    
-    .image-preview {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 120px;
-        border-radius: 4px;
-        overflow: hidden;
-    }
-    
-    .image-preview img {
-        max-height: 100px;
-        max-width: 100%;
-    }
-    
-    .preview-placeholder {
-        text-align: center;
-        color: #6c757d;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-    }
-    
-    .preview-placeholder i {
-        font-size: 2rem;
-        display: block;
-        margin-bottom: 10px;
-    }
-    
-    .image-source-indicator {
-        margin-top: 8px;
-        font-size: 0.85rem;
-        color: #6c757d;
-        text-align: center;
-    }
-    
-    .image-verification {
-        margin-top: 10px;
-        padding: 10px;
-        border-radius: 4px;
-        font-size: 0.9rem;
-    }
-    
-    .image-verification.success {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    
-    .image-verification.error {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-    
-    .path-details, .path-suggestion {
-        margin-top: 5px;
-        font-size: 0.8rem;
-        opacity: 0.8;
-    }
-    
-    .path-suggestion code {
-        background-color: rgba(0,0,0,0.1);
-        padding: 2px 4px;
-        border-radius: 3px;
-    }
-    
-    .form-actions {
-        margin-top: 20px;
-        display: flex;
-        justify-content: flex-end;
-    }
-    
-    .row {
-        display: flex;
-        flex-wrap: wrap;
-        margin: 0 -10px;
-    }
-    
-    .col-md-6 {
-        flex: 0 0 50%;
-        max-width: 50%;
-        padding: 0 10px;
-    }
-    
-    @media (max-width: 768px) {
-        .col-md-6 {
-            flex: 0 0 100%;
-            max-width: 100%;
+    // Get project folder from URL for consistent handling
+    function getProjectFolder() {
+        const urlParts = window.location.pathname.split('/');
+        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        
+        // Don't return project folder in production if it's at root level
+        if (isProduction && (projectFolder === 'admin' || projectFolder === 'assets')) {
+            return '';
         }
         
-        .image-input-group {
-            flex-direction: column;
-        }
+        return projectFolder;
     }
-    
-    /* Logo preview specific styles */
-    #unified-image-preview.library-mode .image-preview {
-        border-color: #28a745;
-        border-style: solid;
-    }
-    
-    #unified-image-preview .image-preview {
-        border-width: 2px;
-        border-style: dashed;
-        border-color: #ced4da;
-    }
-</style>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing settings page with media library integration...');
     
     // Elements
     const logoInput = document.getElementById('logo');
+    const logoUpload = document.getElementById('logo_upload');
     const previewImage = document.getElementById('preview-image');
     const previewPlaceholder = document.getElementById('preview-placeholder');
     const sourceIndicator = document.getElementById('source-indicator');
     const previewContainer = document.getElementById('unified-image-preview');
     
-    // Utility function to get correct image URL
-    function getCorrectImageUrl(path) {
-        if (!path || !path.trim()) return '';
+    // State management
+    let currentMode = null; // 'library', 'upload', or null
+    let uploadDataUrl = null;
+    
+    // Path normalization utility function
+    function normalizePath(path) {
+        if (!path) return '';
         
-        // Get project folder from URL
-        const urlParts = window.location.pathname.split('/');
-        const projectFolder = urlParts[1] ? urlParts[1] : '';
+        console.log("Normalizing path:", path);
         
-        // Normalize path (ensure it starts with a single slash)
-        let normalizedPath = path;
-        if (!normalizedPath.startsWith('/')) {
-            normalizedPath = '/' + normalizedPath;
+        // Replace all backslashes with forward slashes
+        let normalized = path.replace(/\\/g, '/');
+        
+        // Remove any double slashes
+        normalized = normalized.replace(/\/+/g, '/');
+        
+        // Get project folder
+        const projectFolder = getProjectFolder();
+        
+        // Remove project folder if it's in the path (to avoid duplication)
+        if (projectFolder && normalized.toLowerCase().startsWith('/' + projectFolder.toLowerCase() + '/')) {
+            normalized = normalized.substring(('/' + projectFolder).length);
         }
-        normalizedPath = normalizedPath.replace(/\/+/g, '/');
         
-        // Use the origin + project folder + path for the full URL
-        return window.location.origin + '/' + projectFolder + normalizedPath;
+        // Ensure path starts with a single slash
+        normalized = '/' + normalized.replace(/^\/+/, '');
+        
+        console.log("Normalized path:", normalized);
+        return normalized;
     }
     
-    // Initialize with current logo path
-    function updatePreview(path) {
-        if (path && path.trim()) {
-            // Use our URL resolution function
-            const fullImageUrl = getCorrectImageUrl(path);
-            
-            // Show image preview
-            previewImage.src = fullImageUrl;
-            previewImage.style.display = 'block';
-            previewPlaceholder.style.display = 'none';
-            
-            // Add library mode styling
-            previewContainer.classList.add('library-mode');
-            sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
-            
-            console.log('Updated preview with path:', path, 'Full URL:', fullImageUrl);
+    // Function to get correct image URL based on environment
+    function getCorrectImageUrl(path) {
+        if (!path) return '';
+        
+        // Normalize the path first
+        const normalizedPath = normalizePath(path);
+        
+        // Get origin and project folder
+        const origin = window.location.origin;
+        const projectFolder = getProjectFolder();
+        
+        // Build URL based on environment
+        if (isProduction) {
+            // In production (Hostinger), don't add project folder
+            return origin + normalizedPath;
         } else {
-            // Show placeholder
+            // In development, include project folder if available
+            if (projectFolder) {
+                return origin + '/' + projectFolder + normalizedPath;
+            } else {
+                return origin + normalizedPath;
+            }
+        }
+    }
+    
+    // Reset all state
+    function resetState() {
+        console.log('Resetting logo state');
+        
+        // Reset UI elements
+        if (previewImage) {
+            previewImage.src = '';
             previewImage.style.display = 'none';
+        }
+        
+        if (previewPlaceholder) {
             previewPlaceholder.style.display = 'flex';
-            
-            // Reset styling
-            previewContainer.classList.remove('library-mode');
+        }
+        
+        if (sourceIndicator) {
             sourceIndicator.innerHTML = '';
         }
+        
+        if (previewContainer) {
+            previewContainer.className = 'image-preview-container';
+        }
+        
+        // Reset state variables
+        currentMode = null;
+        uploadDataUrl = null;
     }
     
-    // Initialize with current value
-    if (logoInput && logoInput.value.trim()) {
-        updatePreview(logoInput.value);
+    // Activate library mode (for media library selections)
+    function activateLibraryMode(path, displayUrl) {
+        if (!path || path.trim() === '') {
+            resetState();
+            return;
+        }
+        
+        console.log('Activating LIBRARY mode with path:', path);
+        
+        // Format path (for storage in input field)
+        const formattedPath = normalizePath(path);
+        currentMode = 'library';
+        
+        // Update UI for library mode using existing CSS classes
+        if (previewContainer) {
+            previewContainer.className = 'image-preview-container library-mode';
+        }
+        
+        if (sourceIndicator) {
+            sourceIndicator.innerHTML = '<span><i class="bx bx-link"></i> Media Library</span>';
+        }
+        
+        // Get absolute URL for image display
+        const fullImageUrl = displayUrl || getCorrectImageUrl(formattedPath);
+        console.log('Using full image URL:', fullImageUrl);
+        
+        // Update preview with full URL
+        if (previewImage) {
+            previewImage.src = fullImageUrl;
+            previewImage.style.display = 'block';
+        }
+        
+        if (previewPlaceholder) {
+            previewPlaceholder.style.display = 'none';
+        }
+        
+        // Set input value as relative path (for database storage)
+        if (logoInput && logoInput.value !== formattedPath) {
+            logoInput.value = formattedPath;
+        }
+        
+        // Clear file upload input to avoid conflicts
+        if (logoUpload) {
+            logoUpload.value = '';
+        }
+    }
+    
+    // Activate upload mode (for local file uploads)
+    function activateUploadMode(dataUrl, file) {
+        if (!dataUrl) {
+            resetState();
+            return;
+        }
+        
+        console.log('Activating UPLOAD mode with file:', file ? file.name : 'unknown');
+        
+        // Store file reference and data
+        uploadDataUrl = dataUrl;
+        currentMode = 'upload';
+        
+        // Update UI for upload mode using existing CSS classes
+        if (previewContainer) {
+            previewContainer.className = 'image-preview-container upload-mode';
+        }
+        
+        if (sourceIndicator) {
+            sourceIndicator.innerHTML = `<span><i class="bx bx-upload"></i> Local upload: <strong>${file ? file.name : ''}</strong> (not saved until you submit)</span>`;
+        }
+        
+        // Update preview
+        if (previewImage) {
+            previewImage.src = dataUrl;
+            previewImage.style.display = 'block';
+        }
+        
+        if (previewPlaceholder) {
+            previewPlaceholder.style.display = 'none';
+        }
+        
+        // Clear the text input since we're using upload
+        if (logoInput) {
+            logoInput.value = '';
+        }
     }
     
     // Handle changes to the input field directly
     if (logoInput) {
         logoInput.addEventListener('input', function() {
-            updatePreview(this.value);
+            const path = this.value.trim();
+            if (path) {
+                activateLibraryMode(path);
+            } else {
+                resetState();
+            }
         });
+    }
+    
+    // Handle file upload change
+    if (logoUpload) {
+        logoUpload.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    activateUploadMode(e.target.result, file);
+                };
+                
+                reader.onerror = function() {
+                    resetState();
+                    alert('Failed to read file');
+                };
+                
+                reader.readAsDataURL(file);
+            } else if (currentMode === 'upload') {
+                resetState();
+            }
+        });
+    }
+    
+    // Initialize with current logo path
+    if (logoInput && logoInput.value.trim()) {
+        activateLibraryMode(logoInput.value);
     }
     
     // Create global function for media library integration
     window.UnifiedImageUploader = {
-        selectMediaItem: function(path) {
-            if (logoInput) {
-                logoInput.value = path;
-                updatePreview(path);
+        selectMediaItem: function(path, displayUrl) {
+            activateLibraryMode(path, displayUrl);
+        },
+        reset: function() {
+            resetState();
+        },
+        getState: function() {
+            return {
+                mode: currentMode,
+                uploadDataUrl: uploadDataUrl
+            };
+        }
+    };
+    
+    // Legacy compatibility layer
+    window.selectMediaItem = function(path, displayUrl) {
+        window.UnifiedImageUploader.selectMediaItem(path, displayUrl);
+    };
+    
+    // Form validation before submit
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // Basic validation
+            const name = document.getElementById('name').value.trim();
+            const email = document.getElementById('email').value.trim();
+            
+            if (!name) {
+                alert('School name is required');
+                e.preventDefault();
+                return false;
             }
-        }
-    };
-    
-    // Compatibility layer for older code
-    window.selectMediaItem = function(path) {
-        window.UnifiedImageUploader.selectMediaItem(path);
-    };
-    
-    // Connect media library modal integration
-    const mediaModal = document.getElementById('media-library-modal');
-    if (mediaModal) {
-        const insertButton = mediaModal.querySelector('.insert-media');
-        if (insertButton) {
-            insertButton.addEventListener('click', function() {
-                const selectedItem = mediaModal.querySelector('.media-item.selected');
-                if (selectedItem) {
-                    const path = selectedItem.getAttribute('data-path');
-                    if (path && window.UnifiedImageUploader) {
-                        window.UnifiedImageUploader.selectMediaItem(path);
-                        
-                        // Close the modal after selection
-                        mediaModal.style.display = 'none';
-                        document.body.style.overflow = '';
-                    }
-                }
-            });
-        }
+            
+            if (!email) {
+                alert('Email address is required');
+                e.preventDefault();
+                return false;
+            }
+            
+            // Email validation
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Please enter a valid email address');
+                e.preventDefault();
+                return false;
+            }
+            
+            return true;
+        });
     }
+    
+    console.log('Settings page initialized successfully');
+    console.log('Environment:', isProduction ? 'Production' : 'Development');
+    console.log('Project folder:', getProjectFolder());
 });
 </script>
 
 <?php
-include_once '../admin/includes/media-library.php';
+// Include the media library (disable preview to avoid conflicts)
+$disable_media_library_preview = true;
+include_once 'includes/media-library.php';
 render_media_library('logo');
 
 // Get content from buffer
 $content = ob_get_clean();
 
-// Set page title and specific CSS/JS files
+// Set page title and specific CSS/JS files - Updated to use your existing CSS files
 $page_title = 'School Settings';
 $page_specific_css = [
-    '../assets/css/image-selector.css',
-    '../assets/css/media-library.css'
+    'css/image-selector.css',      // Uses your existing CSS
+    'css/media-library.css'        // Uses your existing CSS
 ];
 $page_specific_js = [
-    '../assets/js/media-library.js',
-    '../assets/js/media-modal.js'
+    'js/unified-image-uploader.js',
+    'js/media-library.js',
+    'js/media-modal.js'
 ];
+
+// Additional inline styles for components not covered by existing CSS
+$additional_styles = '
+<style>
+/* Additional styles for settings page components */
+.form-section {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.form-section:last-child {
+    border-bottom: none;
+}
+
+.section-title {
+    color: var(--primary-color);
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.section-title i {
+    margin-right: 10px;
+}
+
+.image-verification {
+    margin-top: 15px;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: flex-start;
+}
+
+.image-verification i {
+    margin-right: 8px;
+    font-size: 1.1rem;
+    margin-top: 2px;
+}
+
+.image-verification.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.image-verification.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.path-suggestion {
+    margin-top: 10px;
+}
+
+.path-suggestion code {
+    background-color: rgba(0,0,0,0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+}
+
+.form-actions {
+    margin-top: 30px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -10px;
+}
+
+.col-md-6 {
+    flex: 0 0 50%;
+    max-width: 50%;
+    padding: 0 10px;
+}
+
+@media (max-width: 768px) {
+    .col-md-6 {
+        flex: 0 0 100%;
+        max-width: 100%;
+        margin-bottom: 15px;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .form-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>';
+
+// Include additional styles in the content
+$content = $additional_styles . $content;
 
 // Include the layout
 include 'layout.php';
