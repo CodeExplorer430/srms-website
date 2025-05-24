@@ -3,7 +3,7 @@
  * Environment Check Tool
  * Comprehensive system for diagnosing server environment, configurations, and requirements
  * Updated for Hostinger compatibility
- * Version: 2.0
+ * Version: 2.1 - Fixed path resolution issues
  */
 
 // Start session and check login
@@ -13,40 +13,94 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
-// Environment-aware path resolution
+/**
+ * Enhanced environment-aware path resolution
+ * This function properly detects the site root directory
+ */
 function get_site_root() {
-    $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
+    // Get the current script's directory
+    $current_dir = __DIR__;
     
-    if ($is_production) {
-        // In production, site is at document root
-        return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
-    } else {
-        // In development, check for project folder
-        $project_folder = '';
-        if (preg_match('#/([^/]+)$#', parse_url(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '', PHP_URL_PATH), $matches)) {
-            $project_folder = $matches[1];
-        }
-        
-        // If project folder found, use it
-        if (!empty($project_folder)) {
-            return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\') . '/' . $project_folder;
-        } else {
-            // Fallback to /srms-website
-            return $_SERVER['DOCUMENT_ROOT'] . '/srms-website';
+    // Navigate up from admin/tools/system to the project root
+    $site_root = dirname(dirname(dirname($current_dir)));
+    
+    // Verify this is the correct directory by checking for key files
+    $key_files = ['includes/config.php', 'includes/db.php', 'environment.php'];
+    $valid_root = true;
+    
+    foreach ($key_files as $file) {
+        if (!file_exists($site_root . DIRECTORY_SEPARATOR . $file)) {
+            $valid_root = false;
+            break;
         }
     }
+    
+    if (!$valid_root) {
+        // Fallback: try to detect from document root
+        $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+        
+        // Check if we're in a subdirectory like 'srms-website'
+        $script_path = str_replace('\\', '/', $_SERVER['SCRIPT_NAME']);
+        if (preg_match('#^/([^/]+)/#', $script_path, $matches)) {
+            $potential_project = $matches[1];
+            $potential_root = $doc_root . DIRECTORY_SEPARATOR . $potential_project;
+            
+            // Verify this potential root
+            $valid_potential = true;
+            foreach ($key_files as $file) {
+                if (!file_exists($potential_root . DIRECTORY_SEPARATOR . $file)) {
+                    $valid_potential = false;
+                    break;
+                }
+            }
+            
+            if ($valid_potential) {
+                return $potential_root;
+            }
+        }
+        
+        // Last fallback
+        return $doc_root . DIRECTORY_SEPARATOR . 'srms-website';
+    }
+    
+    return $site_root;
 }
 
 // Get the site root directory using environment-aware method
 $site_root = get_site_root();
 
-// Include necessary files using absolute paths
-include_once $site_root . '/includes/config.php';
-include_once $site_root . '/includes/db.php';
-include_once $site_root . '/includes/functions.php';
+// Debug logging
+error_log("Environment Check - Site root detected: " . $site_root);
+error_log("Environment Check - Current directory: " . __DIR__);
+error_log("Environment Check - Document root: " . $_SERVER['DOCUMENT_ROOT']);
+
+// Include necessary files using absolute paths with proper error handling
+$required_files = [
+    'config.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'config.php',
+    'db.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php',
+    'functions.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'functions.php'
+];
+
+foreach ($required_files as $name => $path) {
+    if (!file_exists($path)) {
+        die("Critical Error: Required file '{$name}' not found at: {$path}");
+    }
+    
+    $include_result = include_once $path;
+    if ($include_result === false) {
+        die("Critical Error: Failed to include '{$name}' from: {$path}");
+    }
+    error_log("Environment Check - Successfully included: {$name} from {$path}");
+}
 
 // Initialize the database connection if needed
-$db = new Database();
+try {
+    $db = new Database();
+    error_log("Environment Check - Database connection initialized successfully");
+} catch (Exception $e) {
+    error_log("Environment Check - Database connection failed: " . $e->getMessage());
+    $db = null;
+}
 
 // Initialize status arrays
 $system_info = [];
@@ -158,16 +212,7 @@ $php_config_checks = [
 // Enhanced environment detection
 $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
 
-// Determine project folder from SITE_URL
-$project_folder = '';
-if (!$is_production && preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-    $project_folder = $matches[1]; // Should be "srms-website" in development
-}
-
-// Get document root without trailing slash
-$doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
-
-// Check directory permissions
+// Check directory permissions using the corrected site root
 $directory_paths = [
     '/assets/images/news',
     '/assets/images/events',
@@ -179,12 +224,8 @@ $directory_paths = [
 ];
 
 foreach ($directory_paths as $dir_path) {
-    // Build the full server path based on environment
-    $full_path = $doc_root;
-    if (!$is_production && !empty($project_folder)) {
-        $full_path .= DIRECTORY_SEPARATOR . $project_folder;
-    }
-    $full_path .= str_replace('/', DIRECTORY_SEPARATOR, $dir_path);
+    // Build the full server path using the correct site root
+    $full_path = $site_root . str_replace('/', DIRECTORY_SEPARATOR, $dir_path);
     
     $exists = is_dir($full_path);
     $writable = $exists ? is_writable($full_path) : false;
@@ -224,101 +265,105 @@ foreach ($required_extensions as $ext => $description) {
 }
 
 // Check database connection
-try {
-    // First try with defined DB settings
-    $db_host = defined('DB_SERVER') ? DB_SERVER : 'localhost';
-    $db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-    $db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-    $db_name = defined('DB_NAME') ? DB_NAME : 'srms_database';
-    $db_port = defined('DB_PORT') ? DB_PORT : '3306';
-    
-    $dsn = "mysql:host={$db_host};port={$db_port};dbname={$db_name}";
-    $options = [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false
-    ];
-    
-    $pdo = new PDO($dsn, $db_user, $db_pass, $options);
-    
-    // Check database version
-    $version_stmt = $pdo->query('SELECT VERSION() as version');
-    $db_version = $version_stmt->fetch()['version'];
-    
-    // Check database tables
-    $table_query = "SHOW TABLES";
-    $tables_stmt = $pdo->query($table_query);
-    $tables = $tables_stmt->fetchAll(PDO::FETCH_COLUMN);
-    $table_count = count($tables);
-    
-    $database_checks['connection'] = [
-        'name' => 'Database Connection',
-        'status' => 'success',
-        'message' => 'Successfully connected to database'
-    ];
-    
-    $database_checks['server'] = [
-        'name' => 'Database Server',
-        'value' => $db_host . ':' . $db_port,
-        'status' => 'info'
-    ];
-    
-    $database_checks['version'] = [
-        'name' => 'Database Version',
-        'value' => $db_version,
-        'status' => 'info'
-    ];
-    
-    $database_checks['database'] = [
-        'name' => 'Database Name',
-        'value' => $db_name,
-        'status' => 'info'
-    ];
-    
-    $database_checks['tables'] = [
-        'name' => 'Database Tables',
-        'value' => $table_count . ' tables found',
-        'status' => ($table_count > 0) ? 'success' : 'warning',
-        'message' => ($table_count > 0) ? '' : 'No tables found in the database'
-    ];
-} catch (PDOException $e) {
+if ($db !== null) {
+    try {
+        // Get database version
+        $version_stmt = $db->query('SELECT VERSION() as version');
+        if ($version_stmt) {
+            $db_version_row = $version_stmt->fetch_assoc();
+            $db_version = $db_version_row['version'];
+        } else {
+            $db_version = 'Unknown';
+        }
+        
+        // Check database tables
+        $table_query = "SHOW TABLES";
+        $tables_stmt = $db->query($table_query);
+        $table_count = 0;
+        $tables = [];
+        
+        if ($tables_stmt) {
+            while ($row = $tables_stmt->fetch_array()) {
+                $tables[] = $row[0];
+                $table_count++;
+            }
+        }
+        
+        $database_checks['connection'] = [
+            'name' => 'Database Connection',
+            'status' => 'success',
+            'message' => 'Successfully connected to database'
+        ];
+        
+        $database_checks['server'] = [
+            'name' => 'Database Server',
+            'value' => DB_SERVER . ':' . (defined('DB_PORT') ? DB_PORT : '3306'),
+            'status' => 'info'
+        ];
+        
+        $database_checks['version'] = [
+            'name' => 'Database Version',
+            'value' => $db_version,
+            'status' => 'info'
+        ];
+        
+        $database_checks['database'] = [
+            'name' => 'Database Name',
+            'value' => DB_NAME,
+            'status' => 'info'
+        ];
+        
+        $database_checks['tables'] = [
+            'name' => 'Database Tables',
+            'value' => $table_count . ' tables found',
+            'status' => ($table_count > 0) ? 'success' : 'warning',
+            'message' => ($table_count > 0) ? '' : 'No tables found in the database'
+        ];
+    } catch (Exception $e) {
+        $database_checks['connection'] = [
+            'name' => 'Database Connection',
+            'status' => 'error',
+            'message' => 'Connection failed: ' . $e->getMessage()
+        ];
+        
+        $database_checks['server'] = [
+            'name' => 'Database Server',
+            'value' => (defined('DB_SERVER') ? DB_SERVER : 'localhost') . ':' . (defined('DB_PORT') ? DB_PORT : '3306'),
+            'status' => 'info'
+        ];
+        
+        $database_checks['database'] = [
+            'name' => 'Database Name',
+            'value' => defined('DB_NAME') ? DB_NAME : 'srms_database',
+            'status' => 'info'
+        ];
+    }
+} else {
     $database_checks['connection'] = [
         'name' => 'Database Connection',
         'status' => 'error',
-        'message' => 'Connection failed: ' . $e->getMessage()
-    ];
-    
-    $database_checks['server'] = [
-        'name' => 'Database Server',
-        'value' => $db_host . ':' . $db_port,
-        'status' => 'info'
-    ];
-    
-    $database_checks['database'] = [
-        'name' => 'Database Name',
-        'value' => $db_name,
-        'status' => 'info'
+        'message' => 'Database class could not be initialized'
     ];
 }
 
 // Check file and directory permissions based on environment
 $permission_checks['uploads_dir'] = [
     'name' => 'Uploads Directory',
-    'path' => $doc_root . ($is_production ? '' : ($project_folder ? "/{$project_folder}" : '')) . '/assets/uploads',
+    'path' => $site_root . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads',
     'recommendation' => IS_WINDOWS ? '0777 (Full access)' : '0755 (rwxr-xr-x)',
     'status' => 'info'
 ];
 
 $permission_checks['images_dir'] = [
     'name' => 'Images Directory',
-    'path' => $doc_root . ($is_production ? '' : ($project_folder ? "/{$project_folder}" : '')) . '/assets/images',
+    'path' => $site_root . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'images',
     'recommendation' => IS_WINDOWS ? '0777 (Full access)' : '0755 (rwxr-xr-x)',
     'status' => 'info'
 ];
 
 $permission_checks['includes_dir'] = [
     'name' => 'Includes Directory',
-    'path' => $doc_root . ($is_production ? '' : ($project_folder ? "/{$project_folder}" : '')) . '/includes',
+    'path' => $site_root . DIRECTORY_SEPARATOR . 'includes',
     'recommendation' => IS_WINDOWS ? '0755 (Full access)' : '0755 (rwxr-xr-x)',
     'status' => 'info'
 ];
