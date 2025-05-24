@@ -3,25 +3,39 @@
  * Environment Check Tool
  * Comprehensive system for diagnosing server environment, configurations, and requirements
  * Updated for Hostinger compatibility
- * Version: 2.1 - Fixed path resolution issues
+ * Version: 2.2 - Fixed production path resolution
  */
 
 // Start session and check login
 session_start();
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: ' . (defined('IS_PRODUCTION') && IS_PRODUCTION ? '/admin/login.php' : '../../login.php'));
+    // Enhanced login redirect logic for different environments
+    $login_redirect = 'login.php';
+    
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // Production (Hostinger) - admin is at document root
+        $login_redirect = '/admin/login.php';
+    } else {
+        // Development - navigate up from tools/system
+        $login_redirect = '../../login.php';
+    }
+    
+    header('Location: ' . $login_redirect);
     exit;
 }
 
 /**
- * Enhanced environment-aware path resolution
- * This function properly detects the site root directory
+ * Enhanced environment-aware path resolution for Hostinger
  */
 function get_site_root() {
-    // Get the current script's directory
-    $current_dir = __DIR__;
+    // Check if we're in production (Hostinger)
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // On Hostinger, the site root is the document root
+        return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+    }
     
-    // Navigate up from admin/tools/system to the project root
+    // Development environment - navigate up from admin/tools/system
+    $current_dir = __DIR__;
     $site_root = dirname(dirname(dirname($current_dir)));
     
     // Verify this is the correct directory by checking for key files
@@ -59,25 +73,27 @@ function get_site_root() {
             }
         }
         
-        // Last fallback
+        // Last fallback for development
         return $doc_root . DIRECTORY_SEPARATOR . 'srms-website';
     }
     
     return $site_root;
 }
 
-// Get the site root directory using environment-aware method
+// Get the site root directory using enhanced method
 $site_root = get_site_root();
 
-// Debug logging
+// Debug logging with environment detection
+error_log("Environment Check - Environment: " . (defined('IS_PRODUCTION') && IS_PRODUCTION ? 'Production' : 'Development'));
 error_log("Environment Check - Site root detected: " . $site_root);
 error_log("Environment Check - Current directory: " . __DIR__);
 error_log("Environment Check - Document root: " . $_SERVER['DOCUMENT_ROOT']);
+error_log("Environment Check - Script name: " . $_SERVER['SCRIPT_NAME']);
 
 // Include necessary files using absolute paths with proper error handling
 $required_files = [
     'config.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'config.php',
-    'db.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php',
+    'db.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php',  
     'functions.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'functions.php'
 ];
 
@@ -110,7 +126,7 @@ $database_checks = [];
 $extension_checks = [];
 $permission_checks = [];
 
-// Get server information
+// Get server information with enhanced detection
 $system_info = [
     'os' => [
         'name' => 'Operating System',
@@ -125,7 +141,7 @@ $system_info = [
     ],
     'server_software' => [
         'name' => 'Server Software',
-        'value' => $_SERVER['SERVER_SOFTWARE'],
+        'value' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
         'status' => 'info'
     ],
     'document_root' => [
@@ -146,13 +162,13 @@ $system_info = [
     ],
     'environment' => [
         'name' => 'Environment',
-        'value' => defined('IS_PRODUCTION') && IS_PRODUCTION ? 'Production' : 'Development',
+        'value' => defined('IS_PRODUCTION') && IS_PRODUCTION ? 'Production (Hostinger)' : 'Development',
         'status' => 'info'
     ],
     'site_url' => [
         'name' => 'Site URL',
-        'value' => SITE_URL,
-        'status' => 'info'
+        'value' => defined('SITE_URL') ? SITE_URL : 'Not defined',
+        'status' => defined('SITE_URL') ? 'success' : 'error'
     ],
     'directory_separator' => [
         'name' => 'Directory Separator',
@@ -166,10 +182,10 @@ $php_config_checks = [
     'display_errors' => [
         'name' => 'Display Errors',
         'value' => ini_get('display_errors') ? 'On' : 'Off',
-        'status' => ini_get('display_errors') ? (IS_DEVELOPMENT ? 'success' : 'warning') : (IS_DEVELOPMENT ? 'warning' : 'success'),
+        'status' => ini_get('display_errors') ? (defined('IS_DEVELOPMENT') && IS_DEVELOPMENT ? 'success' : 'warning') : (defined('IS_DEVELOPMENT') && IS_DEVELOPMENT ? 'warning' : 'success'),
         'message' => ini_get('display_errors') ? 
-            (IS_DEVELOPMENT ? 'Good for development' : 'Should be turned off in production') : 
-            (IS_DEVELOPMENT ? 'Consider enabling for development' : 'Correctly disabled for production')
+            (defined('IS_DEVELOPMENT') && IS_DEVELOPMENT ? 'Good for development' : 'Should be turned off in production') : 
+            (defined('IS_DEVELOPMENT') && IS_DEVELOPMENT ? 'Consider enabling for development' : 'Correctly disabled for production')
     ],
     'file_uploads' => [
         'name' => 'File Uploads',
@@ -215,7 +231,7 @@ $is_production = defined('IS_PRODUCTION') && IS_PRODUCTION;
 // Check directory permissions using the corrected site root
 $directory_paths = [
     '/assets/images/news',
-    '/assets/images/events',
+    '/assets/images/events', 
     '/assets/images/promotional',
     '/assets/images/facilities',
     '/assets/images/campus',
@@ -297,7 +313,7 @@ if ($db !== null) {
         
         $database_checks['server'] = [
             'name' => 'Database Server',
-            'value' => DB_SERVER . ':' . (defined('DB_PORT') ? DB_PORT : '3306'),
+            'value' => (defined('DB_SERVER') ? DB_SERVER : 'localhost') . ':' . (defined('DB_PORT') ? DB_PORT : '3306'),
             'status' => 'info'
         ];
         
@@ -309,7 +325,7 @@ if ($db !== null) {
         
         $database_checks['database'] = [
             'name' => 'Database Name',
-            'value' => DB_NAME,
+            'value' => defined('DB_NAME') ? DB_NAME : 'srms_database',
             'status' => 'info'
         ];
         
@@ -327,7 +343,7 @@ if ($db !== null) {
         ];
         
         $database_checks['server'] = [
-            'name' => 'Database Server',
+            'name' => 'Database Server', 
             'value' => (defined('DB_SERVER') ? DB_SERVER : 'localhost') . ':' . (defined('DB_PORT') ? DB_PORT : '3306'),
             'status' => 'info'
         ];
@@ -829,7 +845,7 @@ ob_start();
                         if (!empty($missing_extensions)):
                         ?>
                         <li class="recommendation-item error">
-                            <div class="recommendation-header">
+                            <div class="recommendation-header">  
                                 <i class='bx bx-error-circle'></i>
                                 <h5>Install Required Extensions</h5>
                             </div>
@@ -925,7 +941,7 @@ ob_start();
                                 <i class='bx bx-info-circle'></i>
                                 <h5>Production Environment Detected</h5>
                             </div>
-                            <p>This site is running in production mode. Make sure error display is turned off and logging is enabled for security.</p>
+                            <p>This site is running in production mode on Hostinger. Make sure error display is turned off and logging is enabled for security.</p>
                         </li>
                         <?php else: ?>
                         <li class="recommendation-item info">
@@ -968,7 +984,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Tooltip functionality
     const tooltipButtons = document.querySelectorAll('[data-tooltip]');
     
-    tooltipButtons.forEach(button => {
+    tooltipButton.forEach(button => {
         const tooltip = document.createElement('div');
         tooltip.className = 'tooltip-content';
         tooltip.textContent = button.getAttribute('data-tooltip');
@@ -1376,7 +1392,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 .recommendations {
-    padding: 10px;
+    padding: 10px;  
 }
 
 .recommendations h4 {
@@ -1481,7 +1497,7 @@ document.addEventListener('DOMContentLoaded', function() {
     border-radius: 5px;
     font-family: monospace;
     color: #495057;
-    overflow-x: auto;
+    overflow-x: auto;  
 }
 
 .tooltip-content {
@@ -1528,11 +1544,56 @@ $page_title = 'Environment Check Tool';
 $page_specific_css = [];
 $page_specific_js = [];
 
-// Include the layout with environment-aware path
-$layout_path = '../../layout.php';
+// Enhanced layout include logic for different environments
 if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
-    $layout_path = $_SERVER['DOCUMENT_ROOT'] . '/layout.php';
+    // Production (Hostinger) - layout is in admin folder
+    $layout_path = $_SERVER['DOCUMENT_ROOT'] . '/admin/layout.php';
+} else {
+    // Development - navigate up from tools/system to admin
+    $layout_path = '../../layout.php';
 }
 
-include $layout_path;
+// Verify layout file exists before including
+if (!file_exists($layout_path)) {
+    // Fallback attempts
+    $fallback_paths = [
+        __DIR__ . '/../../layout.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/admin/layout.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/srms-website/admin/layout.php'
+    ];
+    
+    foreach ($fallback_paths as $fallback) {
+        if (file_exists($fallback)) {
+            $layout_path = $fallback;
+            break;
+        }
+    }
+}
+
+// Final check and include
+if (file_exists($layout_path)) {
+    include $layout_path;
+} else {
+    // Emergency fallback - render without layout
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?php echo $page_title; ?> | SRMS Admin</title>
+        <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    </head>
+    <body>
+        <div style="padding: 20px;">
+            <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <strong>Warning:</strong> Layout file not found. Running in emergency mode.
+                <br><small>Attempted paths: <?php echo implode(', ', array_merge([$layout_path], $fallback_paths)); ?></small>
+            </div>
+            <?php echo $content; ?>
+        </div>
+    </body>
+    </html>
+    <?php
+}
 ?>

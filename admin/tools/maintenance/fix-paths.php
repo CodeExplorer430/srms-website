@@ -2,32 +2,122 @@
 /**
  * Path Fixing Tool
  * Diagnoses and repairs file and directory path issues in the SRMS website
+ * Updated for Hostinger compatibility
  * 
  * This tool helps administrators identify and fix common path-related problems
  * such as missing directories, incorrect file references, and path inconsistencies
- * between different operating systems.
+ * between different operating systems and hosting environments.
  */
 
 // Start session and check login
 session_start();
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: ../../login.php');
+    // Enhanced login redirect logic for different environments
+    $login_redirect = 'login.php';
+    
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // Production (Hostinger) - admin is at document root
+        $login_redirect = '/admin/login.php';
+    } else {
+        // Development - navigate up from tools/maintenance
+        $login_redirect = '../../login.php';
+    }
+    
+    header('Location: ' . $login_redirect);
     exit;
 }
 
+/**
+ * Enhanced environment-aware path resolution for Hostinger
+ */
+function get_site_root() {
+    // Check if we're in production (Hostinger)
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // On Hostinger, the site root is the document root
+        return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+    }
+    
+    // Development environment - navigate up from admin/tools/maintenance
+    $current_dir = __DIR__;
+    $site_root = dirname(dirname(dirname($current_dir)));
+    
+    // Verify this is the correct directory by checking for key files
+    $key_files = ['includes/config.php', 'includes/db.php', 'environment.php'];
+    $valid_root = true;
+    
+    foreach ($key_files as $file) {
+        if (!file_exists($site_root . DIRECTORY_SEPARATOR . $file)) {
+            $valid_root = false;
+            break;
+        }
+    }
+    
+    if (!$valid_root) {
+        // Fallback: try to detect from document root
+        $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+        
+        // Check if we're in a subdirectory like 'srms-website'
+        $script_path = str_replace('\\', '/', $_SERVER['SCRIPT_NAME']);
+        if (preg_match('#^/([^/]+)/#', $script_path, $matches)) {
+            $potential_project = $matches[1];
+            $potential_root = $doc_root . DIRECTORY_SEPARATOR . $potential_project;
+            
+            // Verify this potential root
+            $valid_potential = true;
+            foreach ($key_files as $file) {
+                if (!file_exists($potential_root . DIRECTORY_SEPARATOR . $file)) {
+                    $valid_potential = false;
+                    break;
+                }
+            }
+            
+            if ($valid_potential) {
+                return $potential_root;
+            }
+        }
+        
+        // Last fallback for development
+        return $doc_root . DIRECTORY_SEPARATOR . 'srms-website';
+    }
+    
+    return $site_root;
+}
+
 // Get the site root directory
-$site_root = $_SERVER['DOCUMENT_ROOT'] . '/srms-website';
+$site_root = get_site_root();
 
 // Include necessary files using absolute paths
-include_once $site_root . '/includes/config.php';
-include_once $site_root . '/includes/db.php';
-include_once $site_root . '/includes/functions.php';
+$required_files = [
+    'config.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'config.php',
+    'db.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php',
+    'functions.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'functions.php'
+];
 
-// Get project folder information
-$project_folder = '';
-if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-    $project_folder = $matches[1]; // Should be "srms-website"
+foreach ($required_files as $name => $path) {
+    if (!file_exists($path)) {
+        die("Critical Error: Required file '{$name}' not found at: {$path}");
+    }
+    include_once $path;
 }
+
+// Enhanced project folder detection for different environments
+function get_project_folder() {
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // On Hostinger, there's no project folder - site is at document root
+        return '';
+    }
+    
+    // Development environment - extract project folder from SITE_URL
+    if (defined('SITE_URL')) {
+        if (preg_match('#/([^/]+)$#', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+            return $matches[1]; // Should be "srms-website"
+        }
+    }
+    
+    return 'srms-website'; // Fallback for development
+}
+
+$project_folder = get_project_folder();
 
 // Document root with consistent format
 $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
@@ -56,10 +146,7 @@ $category = isset($_GET['category']) ? $_GET['category'] : (isset($_POST['catego
 // Process create directory action
 if ($action === 'create_directory' && !empty($category)) {
     if (isset($media_directories[$category])) {
-        $dir_path = $doc_root;
-        if (!empty($project_folder)) {
-            $dir_path .= DIRECTORY_SEPARATOR . $project_folder;
-        }
+        $dir_path = $site_root; // Use site_root instead of building path with doc_root + project_folder
         $dir_path .= str_replace('/', DIRECTORY_SEPARATOR, $media_directories[$category]);
         
         if (!is_dir($dir_path)) {
@@ -76,10 +163,7 @@ if ($action === 'create_directory' && !empty($category)) {
 // Process create test image action
 if ($action === 'create_test_image' && !empty($category)) {
     if (isset($media_directories[$category])) {
-        $dir_path = $doc_root;
-        if (!empty($project_folder)) {
-            $dir_path .= DIRECTORY_SEPARATOR . $project_folder;
-        }
+        $dir_path = $site_root; // Use site_root instead of building path
         $dir_path .= str_replace('/', DIRECTORY_SEPARATOR, $media_directories[$category]);
         
         // Ensure directory exists
@@ -164,23 +248,10 @@ if ($action === 'create_test_image' && !empty($category)) {
 
 // Scan directories and check status
 foreach ($media_directories as $category => $dir) {
-    // Build path with project folder
-    $path_with_project = $doc_root;
-    if (!empty($project_folder)) {
-        $path_with_project .= DIRECTORY_SEPARATOR . $project_folder;
-    }
-    $path_with_project .= str_replace('/', DIRECTORY_SEPARATOR, $dir);
+    // Build correct path using site_root
+    $correct_path = $site_root . str_replace('/', DIRECTORY_SEPARATOR, $dir);
     
-    // Build path without project folder
-    $path_without_project = $doc_root . str_replace('/', DIRECTORY_SEPARATOR, $dir);
-    
-    // Check both paths
-    $exists_with_project = is_dir($path_with_project);
-    $exists_without_project = is_dir($path_without_project);
-    
-    // Determine the correct path
-    $correct_path = $exists_with_project ? $path_with_project : ($exists_without_project ? $path_without_project : '');
-    $exists = !empty($correct_path);
+    $exists = is_dir($correct_path);
     $writable = $exists ? is_writable($correct_path) : false;
     
     // Count files if directory exists
@@ -199,7 +270,7 @@ foreach ($media_directories as $category => $dir) {
             
             foreach ($sample_files as $file) {
                 // Convert to web URL
-                $rel_path = str_replace([$doc_root . DIRECTORY_SEPARATOR . $project_folder, $doc_root], '', $file);
+                $rel_path = str_replace($site_root, '', $file);
                 $rel_path = str_replace(DIRECTORY_SEPARATOR, '/', $rel_path);
                 
                 if (substr($rel_path, 0, 1) !== '/') {
@@ -219,8 +290,6 @@ foreach ($media_directories as $category => $dir) {
     // Store results
     $directory_results[$category] = [
         'path' => [
-            'with_project' => $path_with_project,
-            'without_project' => $path_without_project,
             'correct' => $correct_path
         ],
         'exists' => $exists,
@@ -230,10 +299,10 @@ foreach ($media_directories as $category => $dir) {
     ];
 }
 
-// Generate fixed functions for common path issues
+// Generate fixed functions for common path issues (updated for Hostinger compatibility)
 $fixed_functions = [
     'normalize_image_path' => '
-// Enhanced normalize_image_path function with better cross-platform compatibility
+// Enhanced normalize_image_path function with Hostinger compatibility
 function normalize_image_path($path) {
     if (empty($path)) return \'\';
     
@@ -242,15 +311,20 @@ function normalize_image_path($path) {
         $path = parse_url($path, PHP_URL_PATH);
     }
     
-    // Get project folder from SITE_URL
-    $project_folder = \'\';
-    if (preg_match(\'#/([^/]+)$#\', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-        $project_folder = $matches[1];
-    }
-    
-    // Remove project folder prefix if present (to prevent duplication)
-    if (!empty($project_folder) && stripos($path, \'/\' . $project_folder . \'/\') === 0) {
-        $path = substr($path, strlen(\'/\' . $project_folder));
+    // Remove project folder prefix if present in development
+    if (defined(\'IS_PRODUCTION\') && IS_PRODUCTION) {
+        // In production (Hostinger), no project folder to remove
+    } else {
+        // In development, get project folder from SITE_URL
+        $project_folder = \'\';
+        if (preg_match(\'#/([^/]+)$#\', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
+            $project_folder = $matches[1];
+        }
+        
+        // Remove project folder prefix if present
+        if (!empty($project_folder) && stripos($path, \'/\' . $project_folder . \'/\') === 0) {
+            $path = substr($path, strlen(\'/\' . $project_folder));
+        }
     }
     
     // Ensure path starts with slash and uses forward slashes
@@ -263,7 +337,7 @@ function normalize_image_path($path) {
 }',
 
     'get_correct_image_url' => '
-// Get correct image URL with enhanced error handling and cross-platform support
+// Get correct image URL with Hostinger compatibility  
 function get_correct_image_url($image_path) {
     if (empty($image_path)) {
         return SITE_URL . \'/assets/images/branding/logo-primary.png\'; // Default fallback
@@ -272,71 +346,30 @@ function get_correct_image_url($image_path) {
     // Normalize path (handle slashes, etc.)
     $path = normalize_image_path($image_path);
     
-    // Get project folder from SITE_URL
-    $project_folder = \'\';
-    if (preg_match(\'#/([^/]+)$#\', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-        $project_folder = $matches[1]; // Should be "srms-website"
-    }
-    
     // Check if path is already a full URL
     if (filter_var($path, FILTER_VALIDATE_URL)) {
         return $path;
     }
     
-    // Determine if project folder is already in the path
-    $has_project_folder = !empty($project_folder) && 
-                        (strpos($path, \'/\' . $project_folder . \'/\') === 0 || 
-                         strpos($path, \'/\' . $project_folder . \'/\') !== false);
-    
-    // Build the complete URL
-    if ($has_project_folder) {
-        // Project folder already in path, don\'t add it again
-        $url = SITE_URL . substr($path, strlen(\'/\' . $project_folder));
-    } else {
-        // Add project folder
-        $url = SITE_URL . $path;
-    }
-    
-    return $url;
+    // Build the complete URL (simpler for Hostinger)
+    return SITE_URL . $path;
 }',
 
     'verify_image_exists' => '
-// Improved cross-platform image existence verification
+// Improved cross-platform image existence verification with Hostinger support
 function verify_image_exists($image_path) {
     if (empty($image_path)) return false;
     
     // Normalize path
     $image_path = normalize_image_path($image_path);
     
-    // Get server root and project folder information
+    // Get server root
     $server_root = rtrim($_SERVER[\'DOCUMENT_ROOT\'], \'/\\\\\');
     
-    // Get project folder from SITE_URL
-    $project_folder = \'\';
-    if (preg_match(\'#/([^/]+)$#\', parse_url(SITE_URL, PHP_URL_PATH), $matches)) {
-        $project_folder = $matches[1]; // "srms-website"
-    }
+    // Build path to check
+    $full_path = $server_root . str_replace(\'/\', DIRECTORY_SEPARATOR, $image_path);
     
-    // Build possible paths to check
-    $possible_paths = [];
-    
-    // Path with project folder
-    if (!empty($project_folder)) {
-        $possible_paths[] = $server_root . DIRECTORY_SEPARATOR . $project_folder . 
-                           str_replace(\'/\', DIRECTORY_SEPARATOR, $image_path);
-    }
-    
-    // Path without project folder
-    $possible_paths[] = $server_root . str_replace(\'/\', DIRECTORY_SEPARATOR, $image_path);
-    
-    // Try all possible paths
-    foreach ($possible_paths as $path) {
-        if (file_exists($path)) {
-            return true;
-        }
-    }
-    
-    return false;
+    return file_exists($full_path);
 }'
 ];
 
@@ -370,12 +403,20 @@ ob_start();
                 <div class="info-value"><?php echo htmlspecialchars($doc_root); ?></div>
             </div>
             <div class="info-item">
+                <div class="info-label">Site Root:</div>
+                <div class="info-value"><?php echo htmlspecialchars($site_root); ?></div>
+            </div>
+            <div class="info-item">
                 <div class="info-label">Project Folder:</div>
-                <div class="info-value"><?php echo htmlspecialchars($project_folder); ?></div>
+                <div class="info-value"><?php echo htmlspecialchars($project_folder ?: 'None (Production)'); ?></div>
             </div>
             <div class="info-item">
                 <div class="info-label">Site URL:</div>
                 <div class="info-value"><?php echo htmlspecialchars(SITE_URL); ?></div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Environment:</div>
+                <div class="info-value"><?php echo (defined('IS_PRODUCTION') && IS_PRODUCTION) ? 'Production (Hostinger)' : 'Development'; ?></div>
             </div>
             <div class="info-item">
                 <div class="info-label">Operating System:</div>
@@ -405,7 +446,7 @@ ob_start();
             <div class="table-row">
                 <div class="col-category"><?php echo ucfirst($category); ?></div>
                 <div class="col-path">
-                    <div class="path-display"><?php echo htmlspecialchars($info['path']['correct'] ?: $info['path']['with_project']); ?></div>
+                    <div class="path-display"><?php echo htmlspecialchars($info['path']['correct']); ?></div>
                 </div>
                 <div class="col-exists">
                     <?php if($info['exists']): ?>
@@ -475,6 +516,7 @@ ob_start();
         <h3><i class='bx bx-code-alt'></i> Fixed Path Helper Functions</h3>
         <p class="section-description">
             Copy these improved functions to your <code>functions.php</code> file to fix common path-related issues.
+            These functions are updated for Hostinger compatibility.
         </p>
         
         <div class="function-list">
@@ -495,35 +537,57 @@ ob_start();
     </div>
     
     <div class="recommendations">
-        <h3><i class='bx bx-bulb'></i> Path Recommendations</h3>
+        <h3><i class='bx bx-bulb'></i> Path Recommendations for <?php echo (defined('IS_PRODUCTION') && IS_PRODUCTION) ? 'Hostinger Production' : 'Development'; ?></h3>
+        
+        <?php if (defined('IS_PRODUCTION') && IS_PRODUCTION): ?>
+        <!-- Production (Hostinger) Recommendations -->
+        <div class="recommendation-item">
+            <h4>1. Hostinger Production Environment</h4>
+            <p>Your site is running on Hostinger production. All files are located directly in the document root without a project folder.</p>
+        </div>
         
         <div class="recommendation-item">
-            <h4>1. Use Consistent Path Format</h4>
-            <p>Always use the <code>normalize_image_path()</code> function before working with paths to ensure consistency across different operating systems.</p>
+            <h4>2. Simplified Path Structure</h4>
+            <p>In production, use direct paths:</p>
+            <pre><code class="language-php">$path = $_SERVER['DOCUMENT_ROOT'] . '/assets/images/news/image.jpg';</code></pre>
+        </div>
+        
+        <div class="recommendation-item">
+            <h4>3. URL Generation</h4>
+            <p>Generate URLs directly without project folder consideration:</p>
+            <pre><code class="language-php">$url = SITE_URL . '/assets/images/news/image.jpg';</code></pre>
+        </div>
+        
+        <?php else: ?>
+        <!-- Development Recommendations -->
+        <div class="recommendation-item">
+            <h4>1. Development Environment</h4>
+            <p>You're in development mode. Always include the project folder (<code><?php echo $project_folder; ?></code>) when constructing file paths.</p>
         </div>
         
         <div class="recommendation-item">
             <h4>2. Include Project Folder Check</h4>
             <p>When constructing paths, always check if the project folder needs to be included:</p>
-            <pre><code class="language-php">$path = $doc_root;
+            <pre><code class="language-php">$path = $_SERVER['DOCUMENT_ROOT'];
 if (!empty($project_folder)) {
     $path .= DIRECTORY_SEPARATOR . $project_folder;
 }
 $path .= str_replace('/', DIRECTORY_SEPARATOR, $dir);</code></pre>
         </div>
+        <?php endif; ?>
         
         <div class="recommendation-item">
-            <h4>3. Use Directory Separator Constant</h4>
+            <h4><?php echo (defined('IS_PRODUCTION') && IS_PRODUCTION) ? '4' : '3'; ?>. Use Directory Separator Constant</h4>
             <p>Always use PHP's <code>DIRECTORY_SEPARATOR</code> constant when working with filesystem paths to ensure cross-platform compatibility.</p>
         </div>
         
         <div class="recommendation-item">
-            <h4>4. Verify Image Existence</h4>
-            <p>Use the improved <code>verify_image_exists()</code> function that checks multiple path variations to ensure reliable image detection.</p>
+            <h4><?php echo (defined('IS_PRODUCTION') && IS_PRODUCTION) ? '5' : '4'; ?>. Verify Image Existence</h4>
+            <p>Use the improved <code>verify_image_exists()</code> function that checks the correct paths for your environment.</p>
         </div>
         
         <div class="recommendation-item">
-            <h4>5. Use Forward Slashes in URLs</h4>
+            <h4><?php echo (defined('IS_PRODUCTION') && IS_PRODUCTION) ? '6' : '5'; ?>. Use Forward Slashes in URLs</h4>
             <p>Always convert backslashes to forward slashes when generating URLs:</p>
             <pre><code class="language-php">$url_path = str_replace(DIRECTORY_SEPARATOR, '/', $file_path);</code></pre>
         </div>
@@ -1163,6 +1227,56 @@ $page_title = 'Path Fix Tool';
 $page_specific_css = []; 
 $page_specific_js = [];
 
-// Include the layout with absolute path
-include_once $site_root . '/admin/layout.php';
+// Enhanced layout include logic for different environments
+if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+    // Production (Hostinger) - layout is in admin folder
+    $layout_path = $_SERVER['DOCUMENT_ROOT'] . '/admin/layout.php';
+} else {
+    // Development - navigate up from tools/maintenance to admin
+    $layout_path = '../../layout.php';
+}
+
+// Verify layout file exists before including
+if (!file_exists($layout_path)) {
+    // Fallback attempts
+    $fallback_paths = [
+        __DIR__ . '/../../layout.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/admin/layout.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/srms-website/admin/layout.php'
+    ];
+    
+    foreach ($fallback_paths as $fallback) {
+        if (file_exists($fallback)) {
+            $layout_path = $fallback;
+            break;
+        }
+    }
+}
+
+// Final check and include
+if (file_exists($layout_path)) {
+    include $layout_path;
+} else {
+    // Emergency fallback - render without layout
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?php echo $page_title; ?> | SRMS Admin</title>
+        <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    </head>
+    <body>
+        <div style="padding: 20px;">
+            <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <strong>Warning:</strong> Layout file not found. Running in emergency mode.
+                <br><small>Attempted paths: <?php echo implode(', ', array_merge([$layout_path], $fallback_paths ?? [])); ?></small>
+            </div>
+            <?php echo $content; ?>
+        </div>
+    </body>
+    </html>
+    <?php
+}
 ?>

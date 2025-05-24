@@ -2,6 +2,7 @@
 /**
  * Content Migration Tool
  * Intelligently migrates content from static pages and legacy tables to the CMS system
+ * Updated for Hostinger compatibility
  *
  * This tool helps administrators transfer content from the old static pages structure
  * to the new dynamic CMS-driven content management system.
@@ -13,17 +14,93 @@ session_start();
 // Check login status - require admin privileges
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true || 
     !isset($_SESSION['admin_role']) || $_SESSION['admin_role'] !== 'admin') {
-    header('Location: ../../login.php');
+    // Enhanced login redirect logic for different environments
+    $login_redirect = 'login.php';
+    
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // Production (Hostinger) - admin is at document root
+        $login_redirect = '/admin/login.php';
+    } else {
+        // Development - navigate up from tools/migration
+        $login_redirect = '../../login.php';
+    }
+    
+    header('Location: ' . $login_redirect);
     exit;
 }
 
-// Get the site root directory (works anywhere in the site)
-$site_root = $_SERVER['DOCUMENT_ROOT'] . '/srms-website';
+/**
+ * Enhanced environment-aware path resolution for Hostinger
+ */
+function get_site_root() {
+    // Check if we're in production (Hostinger)
+    if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+        // On Hostinger, the site root is the document root
+        return rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+    }
+    
+    // Development environment - navigate up from admin/tools/migration
+    $current_dir = __DIR__;
+    $site_root = dirname(dirname(dirname($current_dir)));
+    
+    // Verify this is the correct directory by checking for key files
+    $key_files = ['includes/config.php', 'includes/db.php', 'environment.php'];
+    $valid_root = true;
+    
+    foreach ($key_files as $file) {
+        if (!file_exists($site_root . DIRECTORY_SEPARATOR . $file)) {
+            $valid_root = false;
+            break;
+        }
+    }
+    
+    if (!$valid_root) {
+        // Fallback: try to detect from document root
+        $doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/\\');
+        
+        // Check if we're in a subdirectory like 'srms-website'
+        $script_path = str_replace('\\', '/', $_SERVER['SCRIPT_NAME']);
+        if (preg_match('#^/([^/]+)/#', $script_path, $matches)) {
+            $potential_project = $matches[1];
+            $potential_root = $doc_root . DIRECTORY_SEPARATOR . $potential_project;
+            
+            // Verify this potential root
+            $valid_potential = true;
+            foreach ($key_files as $file) {
+                if (!file_exists($potential_root . DIRECTORY_SEPARATOR . $file)) {
+                    $valid_potential = false;
+                    break;
+                }
+            }
+            
+            if ($valid_potential) {
+                return $potential_root;
+            }
+        }
+        
+        // Last fallback for development
+        return $doc_root . DIRECTORY_SEPARATOR . 'srms-website';
+    }
+    
+    return $site_root;
+}
+
+// Get the site root directory
+$site_root = get_site_root();
 
 // Include necessary files using absolute paths
-include_once $site_root . '/includes/config.php';
-include_once $site_root . '/includes/db.php';
-include_once $site_root . '/includes/functions.php';
+$required_files = [
+    'config.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'config.php',
+    'db.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'db.php',
+    'functions.php' => $site_root . DIRECTORY_SEPARATOR . 'includes' . DIRECTORY_SEPARATOR . 'functions.php'
+];
+
+foreach ($required_files as $name => $path) {
+    if (!file_exists($path)) {
+        die("Critical Error: Required file '{$name}' not found at: {$path}");
+    }
+    include_once $path;
+}
 
 // Initialize database connection
 $db = new Database();
@@ -40,10 +117,20 @@ $migration_status = [
 ];
 
 // Check existing data and migration status
-$nav_count = $db->fetch_row("SELECT COUNT(*) as count FROM navigation")['count'];
-$legacy_pages_count = $db->fetch_row("SELECT COUNT(*) as count FROM pages")['count'];
-$cms_pages_count = $db->fetch_row("SELECT COUNT(*) as count FROM page_content")['count'];
-$faculty_count = $db->fetch_row("SELECT COUNT(*) as count FROM faculty")['count'];
+try {
+    $nav_count = $db->fetch_row("SELECT COUNT(*) as count FROM navigation")['count'];
+    $legacy_pages_count = $db->fetch_row("SELECT COUNT(*) as count FROM pages")['count'];
+    $cms_pages_count = $db->fetch_row("SELECT COUNT(*) as count FROM page_content")['count'];
+    $faculty_count = $db->fetch_row("SELECT COUNT(*) as count FROM faculty")['count'];
+} catch (Exception $e) {
+    // Handle case where tables might not exist yet
+    $nav_count = 0;
+    $legacy_pages_count = 0;
+    $cms_pages_count = 0;
+    $faculty_count = 0;
+    
+    error_log("Migration tool: Some database tables not found - " . $e->getMessage());
+}
 
 // Update status based on existing data
 if ($nav_count > 0) {
@@ -57,16 +144,21 @@ if ($cms_pages_count >= $legacy_pages_count && $legacy_pages_count > 0) {
 }
 
 // Check for specific pages
-$about_page = $db->fetch_row("SELECT id FROM page_content WHERE page_key = 'about'");
-if ($about_page) {
-    $migration_status['about'] = 'complete';
-    $completed_steps[] = 'about';
-}
+try {
+    $about_page = $db->fetch_row("SELECT id FROM page_content WHERE page_key = 'about'");
+    if ($about_page) {
+        $migration_status['about'] = 'complete';
+        $completed_steps[] = 'about';
+    }
 
-$alumni_page = $db->fetch_row("SELECT id FROM page_content WHERE page_key = 'alumni'");
-if ($alumni_page) {
-    $migration_status['alumni'] = 'complete';
-    $completed_steps[] = 'alumni';
+    $alumni_page = $db->fetch_row("SELECT id FROM page_content WHERE page_key = 'alumni'");
+    if ($alumni_page) {
+        $migration_status['alumni'] = 'complete';
+        $completed_steps[] = 'alumni';
+    }
+} catch (Exception $e) {
+    // Tables might not exist yet
+    error_log("Migration tool: page_content table not found - " . $e->getMessage());
 }
 
 if ($faculty_count > 0) {
@@ -119,16 +211,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             
             // Get academic levels and add them as submenu
-            $academic_levels = $db->fetch_all("SELECT * FROM academic_levels ORDER BY display_order ASC");
-            foreach ($academic_levels as $index => $level) {
-                $nav_items[] = [
-                    'id' => 9 + $index, 
-                    'name' => strtoupper($level['name']), 
-                    'url' => '/academics/' . $level['slug'] . '.php', 
-                    'parent_id' => 4, 
-                    'display_order' => $index + 1, 
-                    'is_active' => 1
-                ];
+            try {
+                $academic_levels = $db->fetch_all("SELECT * FROM academic_levels ORDER BY display_order ASC");
+                foreach ($academic_levels as $index => $level) {
+                    $nav_items[] = [
+                        'id' => 9 + $index, 
+                        'name' => strtoupper($level['name']), 
+                        'url' => '/academics/' . $level['slug'] . '.php', 
+                        'parent_id' => 4, 
+                        'display_order' => $index + 1, 
+                        'is_active' => 1
+                    ];
+                }
+            } catch (Exception $e) {
+                // Academic levels table might not exist yet
+                error_log("Migration tool: academic_levels table not found - " . $e->getMessage());
             }
             
             // Insert all navigation items
@@ -221,8 +318,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $migration_status['about'] = 'complete';
         } else {
             // Get school information for content
-            $school_info = $db->fetch_row("SELECT * FROM school_information LIMIT 1");
-            $school_goals = $db->fetch_all("SELECT * FROM school_goals ORDER BY display_order ASC");
+            try {
+                $school_info = $db->fetch_row("SELECT * FROM school_information LIMIT 1");
+                $school_goals = $db->fetch_all("SELECT * FROM school_goals ORDER BY display_order ASC");
+            } catch (Exception $e) {
+                $school_info = null;
+                $school_goals = [];
+                error_log("Migration tool: school_information/school_goals tables not found - " . $e->getMessage());
+            }
             
             // Create main page content record
             $title = 'About SRMS';
@@ -494,6 +597,11 @@ ob_start();
         <div class="header-title">
             <h2>Content Migration Tool</h2>
             <p>Migrate content from legacy systems to the new CMS platform</p>
+            <?php if (defined('IS_PRODUCTION') && IS_PRODUCTION): ?>
+            <small class="environment-indicator">Running on Hostinger Production</small>
+            <?php else: ?>
+            <small class="environment-indicator">Running in Development Mode</small>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -795,15 +903,27 @@ ob_start();
             <h3>Content Migration Complete!</h3>
             <p>All migration steps have been successfully completed. Your website now has a fully functional CMS.</p>
             <div class="completion-actions">
-                <a href="../../admin/index.php" class="btn btn-primary">
+                <?php if (defined('IS_PRODUCTION') && IS_PRODUCTION): ?>
+                <a href="/admin/index.php" class="btn btn-primary">
                     <i class='bx bx-home'></i> Go to Dashboard
                 </a>
-                <a href="../../admin/pages-manage.php" class="btn btn-secondary">
+                <a href="/admin/pages-manage.php" class="btn btn-secondary">
                     <i class='bx bx-edit'></i> Manage Pages
                 </a>
-                <a href="../../admin/navigation-manage.php" class="btn btn-secondary">
+                <a href="/admin/navigation-manage.php" class="btn btn-secondary">
                     <i class='bx bx-menu'></i> Manage Navigation
                 </a>
+                <?php else: ?>
+                <a href="../../index.php" class="btn btn-primary">
+                    <i class='bx bx-home'></i> Go to Dashboard
+                </a>
+                <a href="../../pages-manage.php" class="btn btn-secondary">
+                    <i class='bx bx-edit'></i> Manage Pages
+                </a>
+                <a href="../../navigation-manage.php" class="btn btn-secondary">
+                    <i class='bx bx-menu'></i> Manage Navigation
+                </a>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -848,8 +968,18 @@ ob_start();
 }
 
 .header-title p {
-    margin: 0;
+    margin: 0 0 5px 0;
     color: #6c757d;
+}
+
+.environment-indicator {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    background-color: rgba(60, 145, 230, 0.1);
+    color: #3C91E6;
 }
 
 .tool-dashboard {
@@ -1150,6 +1280,7 @@ ob_start();
     cursor: pointer;
     border: none;
     transition: all 0.2s;
+    text-decoration: none;
 }
 
 .btn i {
@@ -1293,6 +1424,56 @@ $page_title = 'Content Migration Tool';
 $page_specific_css = [];
 $page_specific_js = [];
 
-// Include the layout with absolute path
-include_once $site_root . '/admin/layout.php';
+// Enhanced layout include logic for different environments
+if (defined('IS_PRODUCTION') && IS_PRODUCTION) {
+    // Production (Hostinger) - layout is in admin folder
+    $layout_path = $_SERVER['DOCUMENT_ROOT'] . '/admin/layout.php';
+} else {
+    // Development - navigate up from tools/migration to admin
+    $layout_path = '../../layout.php';
+}
+
+// Verify layout file exists before including
+if (!file_exists($layout_path)) {
+    // Fallback attempts
+    $fallback_paths = [
+        __DIR__ . '/../../layout.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/admin/layout.php',
+        $_SERVER['DOCUMENT_ROOT'] . '/srms-website/admin/layout.php'
+    ];
+    
+    foreach ($fallback_paths as $fallback) {
+        if (file_exists($fallback)) {
+            $layout_path = $fallback;
+            break;
+        }
+    }
+}
+
+// Final check and include
+if (file_exists($layout_path)) {
+    include $layout_path;
+} else {
+    // Emergency fallback - render without layout
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title><?php echo $page_title; ?> | SRMS Admin</title>
+        <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    </head>
+    <body>
+        <div style="padding: 20px;">
+            <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <strong>Warning:</strong> Layout file not found. Running in emergency mode.
+                <br><small>Attempted paths: <?php echo implode(', ', array_merge([$layout_path], $fallback_paths ?? [])); ?></small>
+            </div>
+            <?php echo $content; ?>
+        </div>
+    </body>
+    </html>
+    <?php
+}
 ?>
